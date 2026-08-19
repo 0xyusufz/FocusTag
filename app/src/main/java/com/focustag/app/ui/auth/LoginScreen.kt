@@ -1,6 +1,5 @@
 package com.focustag.app.ui.auth
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,27 +16,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun SignupScreen(viewModel: AuthViewModel) {
+fun LoginScreen(viewModel: AuthViewModel) {
     val state by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-
-    LaunchedEffect(Unit) {
-        viewModel.authSuccess.collect {
-            val message = if (state.isLoginMode) "Login Successful!" else "Signup Successful! Please check your email."
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -47,7 +36,7 @@ fun SignupScreen(viewModel: AuthViewModel) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Create Account",
+            text = "Welcome Back",
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -74,18 +63,6 @@ fun SignupScreen(viewModel: AuthViewModel) {
             singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = state.confirmPassword,
-            onValueChange = viewModel::onConfirmPasswordChanged,
-            label = { Text("Confirm Password") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true
-        )
-
         Spacer(modifier = Modifier.height(8.dp))
 
         state.errorMessage?.let { error ->
@@ -99,7 +76,7 @@ fun SignupScreen(viewModel: AuthViewModel) {
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = viewModel::onSignupClicked,
+            onClick = viewModel::onLoginClicked,
             modifier = Modifier.fillMaxWidth(),
             enabled = !state.isLoading
         ) {
@@ -110,14 +87,14 @@ fun SignupScreen(viewModel: AuthViewModel) {
                     strokeWidth = 2.dp
                 )
             } else {
-                Text("Sign Up")
+                Text("Log In")
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         TextButton(onClick = viewModel::toggleAuthMode) {
-            Text("Already have an account? Log In")
+            Text("Don't have an account? Sign Up")
         }
     }
 }

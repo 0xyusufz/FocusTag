@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focustag.app.data.repository.SupabaseAuthRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.ui.auth.AuthViewModel
+import com.focustag.app.ui.auth.LoginScreen
 import com.focustag.app.ui.auth.SignupScreen
 import com.focustag.app.ui.theme.FocusTagTheme
 import io.github.jan.supabase.auth.handleDeeplinks
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
                     )
                     
                     val sessionStatus by authViewModel.sessionStatus.collectAsState()
+                    val uiState by authViewModel.uiState.collectAsState()
                     
                     Box(
                         modifier = Modifier
@@ -56,7 +58,11 @@ class MainActivity : ComponentActivity() {
                                 Text(text = "Email verified / Session active")
                             }
                             else -> {
-                                SignupScreen(viewModel = authViewModel)
+                                if (uiState.isLoginMode) {
+                                    LoginScreen(viewModel = authViewModel)
+                                } else {
+                                    SignupScreen(viewModel = authViewModel)
+                                }
                             }
                         }
                     }

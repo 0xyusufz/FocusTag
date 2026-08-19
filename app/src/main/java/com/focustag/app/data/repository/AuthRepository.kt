@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 interface AuthRepository {
     val sessionStatus: StateFlow<SessionStatus>
     suspend fun signUp(email: String, password: String): Result<Unit>
+    suspend fun signIn(email: String, password: String): Result<Unit>
 }
 
 class SupabaseAuthRepository : AuthRepository {
@@ -17,6 +18,18 @@ class SupabaseAuthRepository : AuthRepository {
     override suspend fun signUp(email: String, password: String): Result<Unit> {
         return try {
             SupabaseModule.client.auth.signUpWith(Email, redirectUrl = "focustag://auth/callback") {
+                this.email = email
+                this.password = password
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun signIn(email: String, password: String): Result<Unit> {
+        return try {
+            SupabaseModule.client.auth.signInWith(Email) {
                 this.email = email
                 this.password = password
             }
