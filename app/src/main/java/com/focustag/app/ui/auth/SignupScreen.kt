@@ -54,6 +54,16 @@ fun SignupScreen(viewModel: AuthViewModel) {
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
+            value = state.name,
+            onValueChange = viewModel::onNameChanged,
+            label = { Text("Full Name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
             value = state.email,
             onValueChange = viewModel::onEmailChanged,
             label = { Text("Email") },

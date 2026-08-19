@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.auth.status.SessionStatus
 
 @Composable
-fun HomeScreen(viewModel: AuthViewModel) {
+fun HomeScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
     val sessionStatus by viewModel.sessionStatus.collectAsState()
     
     val userEmail = when (val status = sessionStatus) {
@@ -104,6 +105,15 @@ fun HomeScreen(viewModel: AuthViewModel) {
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        OutlinedButton(
+            onClick = onNavigateToProfile,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("View Profile")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = viewModel::signOut,

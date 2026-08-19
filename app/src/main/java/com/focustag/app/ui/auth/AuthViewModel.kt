@@ -20,6 +20,7 @@ import java.io.IOException
 private const val TAG = "AuthDebug"
 
 data class AuthUiState(
+    val name: String = "",
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
@@ -38,6 +39,10 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     private val _authSuccess = MutableSharedFlow<Unit>()
     val authSuccess = _authSuccess.asSharedFlow()
 
+    fun onNameChanged(name: String) {
+        _uiState.update { it.copy(name = name, errorMessage = null) }
+    }
+
     fun onEmailChanged(email: String) {
         _uiState.update { it.copy(email = email, errorMessage = null) }
     }
@@ -54,6 +59,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         _uiState.update { 
             it.copy(
                 isLoginMode = !it.isLoginMode,
+                name = "",
                 email = "",
                 password = "",
                 confirmPassword = "",
@@ -80,7 +86,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun onSignupClicked() {
         val state = _uiState.value
         
-        if (state.email.isBlank() || state.password.isBlank() || state.confirmPassword.isBlank()) {
+        if (state.name.isBlank() || state.email.isBlank() || state.password.isBlank() || state.confirmPassword.isBlank()) {
             _uiState.update { it.copy(errorMessage = "All fields are required") }
             return
         }
@@ -92,7 +98,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val result = repository.signUp(state.email, state.password)
+            val result = repository.signUp(state.email, state.password, state.name)
             handleResult(result)
         }
     }
