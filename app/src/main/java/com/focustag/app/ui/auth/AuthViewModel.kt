@@ -97,6 +97,12 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
+    fun signOut() {
+        viewModelScope.launch {
+            repository.signOut()
+        }
+    }
+
     private suspend fun handleResult(result: Result<Unit>) {
         result.onSuccess {
             _uiState.update { it.copy(isLoading = false) }

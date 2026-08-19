@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focustag.app.data.repository.SupabaseAuthRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.ui.auth.AuthViewModel
+import com.focustag.app.ui.auth.HomeScreen
 import com.focustag.app.ui.auth.LoginScreen
 import com.focustag.app.ui.auth.SignupScreen
 import com.focustag.app.ui.theme.FocusTagTheme
@@ -55,7 +56,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         when (sessionStatus) {
                             is SessionStatus.Authenticated -> {
-                                Text(text = "Email verified / Session active")
+                                HomeScreen(viewModel = authViewModel)
                             }
                             else -> {
                                 if (uiState.isLoginMode) {

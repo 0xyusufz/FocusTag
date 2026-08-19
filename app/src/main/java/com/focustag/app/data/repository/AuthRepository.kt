@@ -10,6 +10,7 @@ interface AuthRepository {
     val sessionStatus: StateFlow<SessionStatus>
     suspend fun signUp(email: String, password: String): Result<Unit>
     suspend fun signIn(email: String, password: String): Result<Unit>
+    suspend fun signOut(): Result<Unit>
 }
 
 class SupabaseAuthRepository : AuthRepository {
@@ -33,6 +34,15 @@ class SupabaseAuthRepository : AuthRepository {
                 this.email = email
                 this.password = password
             }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun signOut(): Result<Unit> {
+        return try {
+            SupabaseModule.client.auth.signOut()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
