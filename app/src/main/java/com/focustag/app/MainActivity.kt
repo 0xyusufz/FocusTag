@@ -25,7 +25,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focustag.app.data.repository.SupabaseAuthRepository
 import com.focustag.app.data.repository.SupabaseProfileRepository
+import com.focustag.app.data.repository.AppInventoryRepository
+import com.focustag.app.data.repository.AppPolicyRepository
 import com.focustag.app.data.supabase.SupabaseModule
+import com.focustag.app.ui.apps.AppSelectionScreen
+import com.focustag.app.ui.apps.AppSelectionViewModel
 import com.focustag.app.ui.auth.AuthViewModel
 import com.focustag.app.ui.auth.HomeScreen
 import com.focustag.app.ui.auth.LoginScreen
@@ -66,6 +70,22 @@ class MainActivity : ComponentActivity() {
                     val uiState by authViewModel.uiState.collectAsState()
                     var currentScreen by remember { mutableStateOf("home") }
 
+                    val appSelectionViewModel: AppSelectionViewModel? = if (sessionStatus is SessionStatus.Authenticated) {
+                        val userId = (sessionStatus as SessionStatus.Authenticated).session.user?.id ?: ""
+                        viewModel(
+                            key = userId, // Scoped to user
+                            factory = object : ViewModelProvider.Factory {
+                                @Suppress("UNCHECKED_CAST")
+                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                    return AppSelectionViewModel(
+                                        AppInventoryRepository(this@MainActivity),
+                                        AppPolicyRepository(this@MainActivity, userId)
+                                    ) as T
+                                }
+                            }
+                        )
+                    } else null
+
                     LaunchedEffect(sessionStatus) {
                         Log.d("MainActivity", "Auth status changed: $sessionStatus")
                         if (sessionStatus is SessionStatus.Authenticated) {
@@ -92,9 +112,18 @@ class MainActivity : ComponentActivity() {
                                         viewModel = profileViewModel,
                                         onBack = { currentScreen = "home" }
                                     )
+                                    "apps" -> {
+                                        appSelectionViewModel?.let {
+                                            AppSelectionScreen(
+                                                viewModel = it,
+                                                onBack = { currentScreen = "home" }
+                                            )
+                                        }
+                                    }
                                     else -> HomeScreen(
                                         viewModel = authViewModel,
-                                        onNavigateToProfile = { currentScreen = "profile" }
+                                        onNavigateToProfile = { currentScreen = "profile" },
+                                        onNavigateToApps = { currentScreen = "apps" }
                                     )
                                 }
                             }

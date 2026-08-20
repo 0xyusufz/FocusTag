@@ -27,7 +27,11 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.auth.status.SessionStatus
 
 @Composable
-fun HomeScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
+fun HomeScreen(
+    viewModel: AuthViewModel, 
+    onNavigateToProfile: () -> Unit,
+    onNavigateToApps: () -> Unit
+) {
     val sessionStatus by viewModel.sessionStatus.collectAsState()
     
     val userEmail = when (val status = sessionStatus) {
@@ -91,10 +95,17 @@ fun HomeScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Attendance Status",
+                    text = "Focus Mode",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onNavigateToApps,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Manage Focus Apps")
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "NFC Attendance functionality coming soon. Stay tuned!",
