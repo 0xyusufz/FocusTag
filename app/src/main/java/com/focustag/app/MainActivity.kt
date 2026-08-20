@@ -23,10 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.focustag.app.data.model.FocusSessionState
+import com.focustag.app.data.model.FocusState
 import com.focustag.app.data.repository.SupabaseAuthRepository
 import com.focustag.app.data.repository.SupabaseProfileRepository
 import com.focustag.app.data.repository.AppInventoryRepository
 import com.focustag.app.data.repository.AppPolicyRepository
+import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.ui.apps.AppSelectionScreen
 import com.focustag.app.ui.apps.AppSelectionViewModel
@@ -34,6 +37,7 @@ import com.focustag.app.ui.auth.AuthViewModel
 import com.focustag.app.ui.auth.HomeScreen
 import com.focustag.app.ui.auth.LoginScreen
 import com.focustag.app.ui.auth.SignupScreen
+import com.focustag.app.ui.focus.FocusViewModel
 import com.focustag.app.ui.profile.ProfileScreen
 import com.focustag.app.ui.profile.ProfileViewModel
 import com.focustag.app.ui.theme.FocusTagTheme
@@ -86,6 +90,24 @@ class MainActivity : ComponentActivity() {
                         )
                     } else null
 
+                    val focusViewModel: FocusViewModel? = if (sessionStatus is SessionStatus.Authenticated) {
+                        val userId = (sessionStatus as SessionStatus.Authenticated).session.user?.id ?: ""
+                        viewModel(
+                            key = "focus_$userId", // Scoped to user
+                            factory = object : ViewModelProvider.Factory {
+                                @Suppress("UNCHECKED_CAST")
+                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                    return FocusViewModel(
+                                        FocusRepository(this@MainActivity, userId)
+                                    ) as T
+                                }
+                            }
+                        )
+                    } else null
+
+                    val focusSessionState by focusViewModel?.focusState?.collectAsState(initial = FocusSessionState()) ?: remember { mutableStateOf(FocusSessionState()) }
+                    val isFocusActive = focusSessionState.focusState == FocusState.FOCUS_ACTIVE
+
                     LaunchedEffect(sessionStatus) {
                         Log.d("MainActivity", "Auth status changed: $sessionStatus")
                         if (sessionStatus is SessionStatus.Authenticated) {
@@ -110,21 +132,28 @@ class MainActivity : ComponentActivity() {
                                 when (currentScreen) {
                                     "profile" -> ProfileScreen(
                                         viewModel = profileViewModel,
+                                        isFocusActive = isFocusActive,
                                         onBack = { currentScreen = "home" }
                                     )
                                     "apps" -> {
                                         appSelectionViewModel?.let {
                                             AppSelectionScreen(
                                                 viewModel = it,
+                                                isFocusActive = isFocusActive,
                                                 onBack = { currentScreen = "home" }
                                             )
                                         }
                                     }
-                                    else -> HomeScreen(
-                                        viewModel = authViewModel,
-                                        onNavigateToProfile = { currentScreen = "profile" },
-                                        onNavigateToApps = { currentScreen = "apps" }
-                                    )
+                                    else -> {
+                                        focusViewModel?.let { focusVM ->
+                                            HomeScreen(
+                                                authViewModel = authViewModel,
+                                                focusViewModel = focusVM,
+                                                onNavigateToProfile = { currentScreen = "profile" },
+                                                onNavigateToApps = { currentScreen = "apps" }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             else -> {

@@ -34,7 +34,7 @@ import com.focustag.app.data.model.ResolvedPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppSelectionScreen(viewModel: AppSelectionViewModel, onBack: () -> Unit) {
+fun AppSelectionScreen(viewModel: AppSelectionViewModel, isFocusActive: Boolean, onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -75,6 +75,7 @@ fun AppSelectionScreen(viewModel: AppSelectionViewModel, onBack: () -> Unit) {
                             items(appsInCategory) { resolvedPolicy ->
                                 AppPolicyItem(
                                     resolvedPolicy = resolvedPolicy,
+                                    isFocusActive = isFocusActive,
                                     onToggle = { viewModel.toggleAppSelection(it) }
                                 )
                                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
@@ -121,7 +122,7 @@ fun CategoryHeader(name: String) {
 }
 
 @Composable
-fun AppPolicyItem(resolvedPolicy: ResolvedPolicy, onToggle: (String) -> Unit) {
+fun AppPolicyItem(resolvedPolicy: ResolvedPolicy, isFocusActive: Boolean, onToggle: (String) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -143,14 +144,16 @@ fun AppPolicyItem(resolvedPolicy: ResolvedPolicy, onToggle: (String) -> Unit) {
                 } else {
                     Checkbox(
                         checked = true,
-                        onCheckedChange = { onToggle(resolvedPolicy.appInfo.packageName) }
+                        onCheckedChange = { onToggle(resolvedPolicy.appInfo.packageName) },
+                        enabled = !isFocusActive
                     )
                 }
             }
             FocusAction.ALLOW -> {
                 Checkbox(
                     checked = false,
-                    onCheckedChange = { onToggle(resolvedPolicy.appInfo.packageName) }
+                    onCheckedChange = { onToggle(resolvedPolicy.appInfo.packageName) },
+                    enabled = !isFocusActive
                 )
             }
         }

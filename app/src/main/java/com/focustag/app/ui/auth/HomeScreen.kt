@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -24,15 +25,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.focustag.app.data.model.FocusState
+import com.focustag.app.ui.focus.FocusViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
 
 @Composable
 fun HomeScreen(
-    viewModel: AuthViewModel, 
+    authViewModel: AuthViewModel,
+    focusViewModel: FocusViewModel,
     onNavigateToProfile: () -> Unit,
     onNavigateToApps: () -> Unit
 ) {
-    val sessionStatus by viewModel.sessionStatus.collectAsState()
+    val sessionStatus by authViewModel.sessionStatus.collectAsState()
+    val focusSessionState by focusViewModel.focusState.collectAsState()
     
     val userEmail = when (val status = sessionStatus) {
         is SessionStatus.Authenticated -> status.session.user?.email ?: "Unknown User"
@@ -100,13 +105,46 @@ fun HomeScreen(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                
+                // Focus Status Display
+                val isFocusActive = focusSessionState.focusState == FocusState.FOCUS_ACTIVE
+                Text(
+                    text = if (isFocusActive) "STATUS: ACTIVE" else "STATUS: OFF",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isFocusActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Button(
+                    onClick = focusViewModel::onSimulatedTagTap,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = if (isFocusActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
+                ) {
+                    Text(if (isFocusActive) "Simulate Focus Tag (Deactivate)" else "Simulate Focus Tag (Activate)")
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
                 Button(
                     onClick = onNavigateToApps,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isFocusActive
                 ) {
                     Text("Manage Focus Apps")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+                
+                if (isFocusActive) {
+                    Text(
+                        text = "Configuration locked while Focus is active",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
                 Text(
                     text = "NFC Attendance functionality coming soon. Stay tuned!",
                     style = MaterialTheme.typography.bodyMedium,
@@ -117,9 +155,12 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        val isFocusActive = focusSessionState.focusState == FocusState.FOCUS_ACTIVE
+
         OutlinedButton(
             onClick = onNavigateToProfile,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isFocusActive
         ) {
             Text("View Profile")
         }
@@ -127,8 +168,9 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(
-            onClick = viewModel::signOut,
-            modifier = Modifier.fillMaxWidth()
+            onClick = authViewModel::signOut,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isFocusActive
         ) {
             Text("Log Out")
         }

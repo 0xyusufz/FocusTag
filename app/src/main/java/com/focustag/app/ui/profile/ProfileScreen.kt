@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit) {
+fun ProfileScreen(viewModel: ProfileViewModel, isFocusActive: Boolean, onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
 
     Column(
@@ -107,10 +107,20 @@ fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit) {
             } else {
                 Button(
                     onClick = viewModel::toggleEditing,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isFocusActive
                 ) {
                     Text("Edit Name")
                 }
+            }
+
+            if (isFocusActive) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Profile editing locked while Focus is active",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
