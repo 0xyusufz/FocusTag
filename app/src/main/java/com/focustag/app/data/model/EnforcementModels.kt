@@ -1,56 +1,50 @@
 package com.focustag.app.data.model
 
-import kotlinx.serialization.Serializable
+data class EnforcementPolicy(
+    val focusState: FocusState,
+    val activeTagId: String?,
+    val blockedPackages: Set<String>,
+    val protectedPackages: Set<String>,
+    val allowedPackages: Set<String>
+) {
+    val shouldEnforce: Boolean
+        get() = focusState == FocusState.FOCUS_ACTIVE
 
-@Serializable
-enum class EnforcementStatus {
-    IDLE,
-    ENFORCEMENT_SIMULATED,
-    ENFORCEMENT_ACTIVE,
-    ENFORCEMENT_DEGRADED,
-    ENFORCEMENT_FAILED,
-    ENFORCEMENT_UNAVAILABLE,
-    CLEANUP_PENDING
+    companion object {
+        fun from(
+            focusSessionState: FocusSessionState,
+            resolvedPolicies: List<ResolvedPolicy>
+        ): EnforcementPolicy {
+            return EnforcementPolicy(
+                focusState = focusSessionState.focusState,
+                activeTagId = focusSessionState.activeTagId,
+                blockedPackages = resolvedPolicies
+                    .filter { it.action == FocusAction.BLOCK }
+                    .map { it.appInfo.packageName }
+                    .toSet(),
+                protectedPackages = resolvedPolicies
+                    .filter { it.action == FocusAction.PROTECTED }
+                    .map { it.appInfo.packageName }
+                    .toSet(),
+                allowedPackages = resolvedPolicies
+                    .filter { it.action == FocusAction.ALLOW }
+                    .map { it.appInfo.packageName }
+                    .toSet()
+            )
+        }
+    }
 }
 
-@Serializable
-enum class EnforcementMechanism {
-    NO_OP,
-    DEVICE_OWNER,
-    ACCESSIBILITY
+enum class EnforcementLifecycleState {
+    INACTIVE,
+    STARTING,
+    ACTIVE,
+    STOPPING,
+    RECOVERY_REQUIRED
 }
 
-@Serializable
-sealed class EnforcementResult {
-    @Serializable
-    data class Success(val appliedLedger: EnforcementLedger) : EnforcementResult()
-    @Serializable
-    data class Simulated(val appliedLedger: EnforcementLedger) : EnforcementResult()
-    @Serializable
-    data object PartialFailure : EnforcementResult()
-    @Serializable
-    data object Failure : EnforcementResult()
-    @Serializable
-    data object Unavailable : EnforcementResult()
-}
-
-@Serializable
-data class EnforcementSnapshot(
-    val sessionId: String,
-    val userId: String,
-    val timestamp: Long,
-    val policies: List<ResolvedPolicy>
-)
-
-@Serializable
-data class EnforcementLedgerEntry(
-    val packageName: String,
-    val mechanism: EnforcementMechanism,
-    val appliedAt: Long,
-    val sessionId: String
-)
-
-@Serializable
-data class EnforcementLedger(
-    val entries: Map<String, EnforcementLedgerEntry> = emptyMap()
+data class EnforcementState(
+    val lifecycleState: EnforcementLifecycleState = EnforcementLifecycleState.INACTIVE,
+    val activePolicy: EnforcementPolicy? = null,
+    val lastError: String? = null
 )

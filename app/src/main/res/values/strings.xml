@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">FocusTag</string>
+    <string name="focus_tag_accessibility_service_description">Detects foreground app changes during Focus Mode so FocusTag can show a blocking screen for restricted apps.</string>
 </resources>

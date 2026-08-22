@@ -1,7 +1,11 @@
 package com.focustag.app.domain
 
+import com.focustag.app.data.model.EnforcementPolicy
+import com.focustag.app.data.model.EnforcementState
 import com.focustag.app.data.model.FocusSessionState
 import com.focustag.app.data.model.FocusState
+import com.focustag.app.data.model.ResolvedPolicy
+import com.focustag.app.domain.enforcement.EnforcementAbstraction
 
 object FocusStateEngine {
 
@@ -26,6 +30,28 @@ object FocusStateEngine {
                     activeTagId = null
                 )
             }
+        }
+    }
+
+    fun syncEnforcement(
+        previousState: FocusSessionState,
+        nextState: FocusSessionState,
+        resolvedPolicies: List<ResolvedPolicy>,
+        enforcementAbstraction: EnforcementAbstraction
+    ): EnforcementState {
+        return when {
+            previousState.focusState == FocusState.NORMAL &&
+                nextState.focusState == FocusState.FOCUS_ACTIVE -> {
+                val enforcementPolicy = EnforcementPolicy.from(nextState, resolvedPolicies)
+                enforcementAbstraction.start(enforcementPolicy)
+            }
+
+            previousState.focusState == FocusState.FOCUS_ACTIVE &&
+                nextState.focusState == FocusState.NORMAL -> {
+                enforcementAbstraction.stop()
+            }
+
+            else -> enforcementAbstraction.currentState
         }
     }
 }
