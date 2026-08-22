@@ -38,8 +38,6 @@ fun HomeScreen(
 ) {
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val focusSessionState by focusViewModel.focusState.collectAsState()
-    val enforcementStatus by focusViewModel.enforcementStatus.collectAsState()
-    val isTransitioning by focusViewModel.isTransitioning.collectAsState()
     
     val userEmail = when (val status = sessionStatus) {
         is SessionStatus.Authenticated -> status.session.user?.email ?: "Unknown User"
@@ -117,31 +115,14 @@ fun HomeScreen(
                     color = if (isFocusActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                 )
                 
-                if (isFocusActive) {
-                    Text(
-                        text = "Enforcement: ${enforcementStatus.name}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Button(
                     onClick = focusViewModel::onSimulatedTagTap,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isTransitioning,
                     colors = if (isFocusActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
                 ) {
-                    if (isTransitioning) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(if (isFocusActive) "Simulate Focus Tag (Deactivate)" else "Simulate Focus Tag (Activate)")
-                    }
+                    Text(if (isFocusActive) "Simulate Focus Tag (Deactivate)" else "Simulate Focus Tag (Activate)")
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))

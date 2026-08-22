@@ -29,11 +29,8 @@ import com.focustag.app.data.repository.SupabaseAuthRepository
 import com.focustag.app.data.repository.SupabaseProfileRepository
 import com.focustag.app.data.repository.AppInventoryRepository
 import com.focustag.app.data.repository.AppPolicyRepository
-import com.focustag.app.data.repository.EnforcementRepository
 import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.supabase.SupabaseModule
-import com.focustag.app.domain.EnforcementCoordinator
-import com.focustag.app.domain.NoOpEnforcementStrategy
 import com.focustag.app.ui.apps.AppSelectionScreen
 import com.focustag.app.ui.apps.AppSelectionViewModel
 import com.focustag.app.ui.auth.AuthViewModel
@@ -44,6 +41,7 @@ import com.focustag.app.ui.focus.FocusViewModel
 import com.focustag.app.ui.profile.ProfileScreen
 import com.focustag.app.ui.profile.ProfileViewModel
 import com.focustag.app.ui.theme.FocusTagTheme
+import com.focustag.app.platform.enforcement.AndroidEnforcementFactory
 import io.github.jan.supabase.auth.handleDeeplinks
 import io.github.jan.supabase.auth.status.SessionStatus
 
@@ -100,19 +98,13 @@ class MainActivity : ComponentActivity() {
                             factory = object : ViewModelProvider.Factory {
                                 @Suppress("UNCHECKED_CAST")
                                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    val inventoryRepo = AppInventoryRepository(this@MainActivity)
-                                    val policyRepo = AppPolicyRepository(this@MainActivity, userId)
-                                    val enforcementRepo = EnforcementRepository(this@MainActivity, userId)
-                                    val coordinator = EnforcementCoordinator(
-                                        userId = userId,
-                                        inventoryRepository = inventoryRepo,
-                                        policyRepository = policyRepo,
-                                        enforcementRepository = enforcementRepo,
-                                        strategy = NoOpEnforcementStrategy()
-                                    )
+                                    val enforcementRuntime = AndroidEnforcementFactory.create(this@MainActivity)
                                     return FocusViewModel(
                                         FocusRepository(this@MainActivity, userId),
-                                        coordinator
+                                        AppInventoryRepository(this@MainActivity),
+                                        AppPolicyRepository(this@MainActivity, userId),
+                                        enforcementRuntime,
+                                        enforcementRuntime
                                     ) as T
                                 }
                             }
