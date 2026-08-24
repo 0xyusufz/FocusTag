@@ -33,6 +33,7 @@ class FocusViewModel(
 
     init {
         refreshAccessibilityCapability()
+        
         // Initial reconciliation if app was killed while ACTIVE
         viewModelScope.launch {
             if (_focusState.value.focusState == FocusState.FOCUS_ACTIVE) {
@@ -46,6 +47,18 @@ class FocusViewModel(
                 refreshEnforcementStatus()
             }
         }
+
+        // Monitor capability changes to trigger reconciliation or update status
+        viewModelScope.launch {
+            accessibilityCapability.collect { capability ->
+                val isReady = capability == AccessibilityCapability.ACCESSIBILITY_READY
+                enforcementCoordinator.refreshStatus(isReady)
+                
+                if (isReady && _focusState.value.focusState == FocusState.FOCUS_ACTIVE) {
+                    enforcementCoordinator.reconcile()
+                }
+            }
+        }
     }
 
     fun refreshAccessibilityCapability() {
@@ -55,7 +68,8 @@ class FocusViewModel(
     }
 
     fun refreshEnforcementStatus() {
-        enforcementCoordinator.refreshStatus()
+        val isReady = _accessibilityCapability.value == AccessibilityCapability.ACCESSIBILITY_READY
+        enforcementCoordinator.refreshStatus(isReady)
     }
 
     fun onSimulatedTagTap() {
@@ -67,6 +81,13 @@ class FocusViewModel(
         
         val nextState = FocusStateEngine.calculateNextState(currentState, simulatedTagId)
         
+        // Guard: If transitioning to ACTIVE, require accessibility to be READY
+        if (nextState.focusState == FocusState.FOCUS_ACTIVE && 
+            _accessibilityCapability.value != AccessibilityCapability.ACCESSIBILITY_READY) {
+            refreshAccessibilityCapability() // Force refresh in case system state changed
+            return
+        }
+
         // Persist FocusState
         focusRepository.saveFocusSessionState(nextState)
         

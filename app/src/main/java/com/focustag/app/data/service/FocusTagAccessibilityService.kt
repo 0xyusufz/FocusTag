@@ -3,9 +3,6 @@ package com.focustag.app.data.service
 import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.focustag.app.data.model.FocusState
-import com.focustag.app.data.repository.EnforcementRepository
-import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.model.FocusAction
 import java.util.concurrent.atomic.AtomicReference
 
@@ -18,7 +15,7 @@ data class AccessibilitySessionState(
 
 class FocusTagAccessibilityService : AccessibilityService() {
 
-    private companion object {
+    companion object {
         const val TAG = "FocusTagAccessibility"
         val sessionState = AtomicReference(AccessibilitySessionState())
 
@@ -43,39 +40,6 @@ class FocusTagAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "FocusTag AccessibilityService successfully connected")
-        attemptRecovery()
-    }
-
-    private fun attemptRecovery() {
-        try {
-            val enforcementRepo = EnforcementRepository(applicationContext, "") // Device-level access
-            val activeOwnerId = enforcementRepo.getDeviceEnforcementOwnerId() ?: return
-            
-            // Re-init repo with correct userId for user-scoped data
-            val userEnforcementRepo = EnforcementRepository(applicationContext, activeOwnerId)
-            val focusRepo = FocusRepository(applicationContext, activeOwnerId)
-            
-            val snapshot = userEnforcementRepo.getSnapshot()
-            val focusSession = focusRepo.getFocusSessionState()
-
-            if (focusSession.focusState == FocusState.FOCUS_ACTIVE && snapshot != null && snapshot.userId == activeOwnerId) {
-                val blockedPackages = snapshot.policies
-                    .filter { it.action == FocusAction.BLOCK }
-                    .map { it.appInfo.packageName }
-                    .filter { it != packageName } // Defensive self-protection
-                    .toSet()
-
-                updateSessionState(AccessibilitySessionState(
-                    ownerUserId = activeOwnerId,
-                    sessionId = snapshot.sessionId,
-                    blockedPackages = blockedPackages,
-                    isArmed = true
-                ))
-                Log.d(TAG, "Successfully recovered active focus session for $activeOwnerId")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Recovery failed: ${e.message}")
-        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {

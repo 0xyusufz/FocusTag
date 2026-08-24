@@ -30,15 +30,21 @@ class EnforcementCoordinator(
         refreshStatus()
     }
 
-    fun refreshStatus() {
+    fun refreshStatus(isAccessibilityReady: Boolean = true) {
         val current = enforcementRepository.getStatus()
         val isDo = enforcementRepository.isDeviceOwner()
         
+        val snapshot = enforcementRepository.getSnapshot()
+        val owner = enforcementRepository.getDeviceEnforcementOwnerId()
+        val isSessionActive = owner == userId && snapshot != null
+
         val next = when {
-            !isDo -> EnforcementStatus.NOT_DEVICE_OWNER
-            current == EnforcementStatus.NOT_DEVICE_OWNER -> EnforcementStatus.DEVICE_OWNER_READY
-            current == EnforcementStatus.IDLE -> EnforcementStatus.DEVICE_OWNER_READY
-            else -> current
+            isSessionActive -> {
+                if (isAccessibilityReady) EnforcementStatus.ENFORCEMENT_ACTIVE 
+                else EnforcementStatus.ENFORCEMENT_DEGRADED
+            }
+            !isAccessibilityReady && !isDo -> EnforcementStatus.NOT_DEVICE_OWNER
+            else -> EnforcementStatus.DEVICE_OWNER_READY
         }
         
         if (next != current) {

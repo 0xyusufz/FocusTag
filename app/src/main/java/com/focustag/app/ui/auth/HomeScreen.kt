@@ -170,7 +170,7 @@ fun HomeScreen(
                 Button(
                     onClick = focusViewModel::onSimulatedTagTap,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isTransitioning,
+                    enabled = !isTransitioning && (isFocusActive || isAccessibilityReady),
                     colors = if (isFocusActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
                 ) {
                     if (isTransitioning) {

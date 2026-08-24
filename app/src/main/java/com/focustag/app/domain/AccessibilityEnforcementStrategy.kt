@@ -45,7 +45,12 @@ class AccessibilityEnforcementStrategy : EnforcementStrategy {
     }
 
     override suspend fun reconcile(snapshot: EnforcementSnapshot, ledger: EnforcementLedger): EnforcementResult {
-        // Reconcile simply re-publishes the state to the service
+        val currentState = FocusTagAccessibilityService.sessionState.get()
+        if (currentState.isArmed && 
+            currentState.ownerUserId == snapshot.userId && 
+            currentState.sessionId == snapshot.sessionId) {
+            return EnforcementResult.Success(ledger)
+        }
         return apply(snapshot)
     }
 }
