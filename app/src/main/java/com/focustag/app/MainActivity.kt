@@ -33,6 +33,7 @@ import com.focustag.app.data.repository.AppPolicyRepository
 import com.focustag.app.data.repository.EnforcementRepository
 import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.supabase.SupabaseModule
+import com.focustag.app.domain.AccessibilityEnforcementStrategy
 import com.focustag.app.domain.EnforcementCoordinator
 import com.focustag.app.domain.NoOpEnforcementStrategy
 import com.focustag.app.ui.apps.AppSelectionScreen
@@ -109,7 +110,7 @@ class MainActivity : ComponentActivity() {
                                         inventoryRepository = inventoryRepo,
                                         policyRepository = policyRepo,
                                         enforcementRepository = enforcementRepo,
-                                        strategy = NoOpEnforcementStrategy()
+                                        strategy = AccessibilityEnforcementStrategy()
                                     )
                                     return FocusViewModel(
                                         context = this@MainActivity.applicationContext,
