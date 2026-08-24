@@ -1,5 +1,6 @@
 package com.focustag.app.ui.auth
 
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,8 +24,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.focustag.app.data.model.AccessibilityCapability
 import com.focustag.app.data.model.EnforcementStatus
 import com.focustag.app.data.model.FocusState
 import com.focustag.app.ui.focus.FocusViewModel
@@ -41,7 +44,10 @@ fun HomeScreen(
     val focusSessionState by focusViewModel.focusState.collectAsState()
     val enforcementStatus by focusViewModel.enforcementStatus.collectAsState()
     val isTransitioning by focusViewModel.isTransitioning.collectAsState()
+    val accessibilityCapability by focusViewModel.accessibilityCapability.collectAsState()
     
+    val context = LocalContext.current
+
     val userEmail = when (val status = sessionStatus) {
         is SessionStatus.Authenticated -> status.session.user?.email ?: "Unknown User"
         else -> "Guest"
@@ -134,6 +140,30 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Accessibility Capability Display
+                val isAccessibilityReady = accessibilityCapability == AccessibilityCapability.ACCESSIBILITY_READY
+                Text(
+                    text = if (isAccessibilityReady) "Enforcement: Accessibility ready" else "Enforcement: Accessibility unavailable",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isAccessibilityReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (!isAccessibilityReady) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val intent = android.content.Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Enable Accessibility")
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
                 

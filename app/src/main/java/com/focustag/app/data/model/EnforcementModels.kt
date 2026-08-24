@@ -16,6 +16,12 @@ enum class EnforcementStatus {
 }
 
 @Serializable
+enum class AccessibilityCapability {
+    ACCESSIBILITY_UNAVAILABLE,
+    ACCESSIBILITY_READY
+}
+
+@Serializable
 enum class EnforcementMechanism {
     NO_OP,
     DEVICE_OWNER,

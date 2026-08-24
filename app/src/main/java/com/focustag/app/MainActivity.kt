@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -111,8 +112,9 @@ class MainActivity : ComponentActivity() {
                                         strategy = NoOpEnforcementStrategy()
                                     )
                                     return FocusViewModel(
-                                        FocusRepository(this@MainActivity, userId),
-                                        coordinator
+                                        context = this@MainActivity.applicationContext,
+                                        focusRepository = FocusRepository(this@MainActivity, userId),
+                                        enforcementCoordinator = coordinator
                                     ) as T
                                 }
                             }
@@ -131,8 +133,21 @@ class MainActivity : ComponentActivity() {
                             Log.d("MainActivity", "Authenticated: userId=$userId, email=$email")
                             profileViewModel.loadProfile(userId, email)
                             focusViewModel?.refreshEnforcementStatus()
+                            focusViewModel?.refreshAccessibilityCapability()
                         } else {
                             currentScreen = "home"
+                        }
+                    }
+
+                    DisposableEffect(Unit) {
+                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                focusViewModel?.refreshAccessibilityCapability()
+                            }
+                        }
+                        lifecycle.addObserver(observer)
+                        onDispose {
+                            lifecycle.removeObserver(observer)
                         }
                     }
                     
