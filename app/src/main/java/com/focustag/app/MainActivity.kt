@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
                             val email = session.user?.email ?: ""
                             Log.d("MainActivity", "Authenticated: userId=$userId, email=$email")
                             profileViewModel.loadProfile(userId, email)
+                            focusViewModel?.refreshEnforcementStatus()
                         } else {
                             currentScreen = "home"
                         }

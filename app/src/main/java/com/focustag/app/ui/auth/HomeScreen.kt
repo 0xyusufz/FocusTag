@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.focustag.app.data.model.EnforcementStatus
 import com.focustag.app.data.model.FocusState
 import com.focustag.app.ui.focus.FocusViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -117,13 +118,22 @@ fun HomeScreen(
                     color = if (isFocusActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                 )
                 
-                if (isFocusActive) {
-                    Text(
-                        text = "Enforcement: ${enforcementStatus.name}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+                val statusText = when (enforcementStatus) {
+                    EnforcementStatus.NOT_DEVICE_OWNER -> "Enforcement: UNAVAILABLE (No Device Owner)"
+                    EnforcementStatus.DEVICE_OWNER_READY -> "Enforcement: READY (Device Owner Active)"
+                    EnforcementStatus.ENFORCEMENT_SIMULATED -> "Enforcement: SIMULATED"
+                    EnforcementStatus.ENFORCEMENT_ACTIVE -> "Enforcement: ACTIVE"
+                    EnforcementStatus.ENFORCEMENT_DEGRADED -> "Enforcement: DEGRADED"
+                    EnforcementStatus.ENFORCEMENT_FAILED -> "Enforcement: FAILED"
+                    EnforcementStatus.ENFORCEMENT_LOST -> "Enforcement: LOST (Device Owner Revoked)"
+                    else -> "Enforcement: ${enforcementStatus.name}"
                 }
+
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 

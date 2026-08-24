@@ -34,8 +34,14 @@ class FocusViewModel(
                 } finally {
                     _isTransitioning.update { false }
                 }
+            } else {
+                refreshEnforcementStatus()
             }
         }
+    }
+
+    fun refreshEnforcementStatus() {
+        enforcementCoordinator.refreshStatus()
     }
 
     fun onSimulatedTagTap() {

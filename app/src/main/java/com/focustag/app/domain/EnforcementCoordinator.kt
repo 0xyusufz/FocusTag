@@ -26,6 +26,26 @@ class EnforcementCoordinator(
     private val _status = MutableStateFlow(enforcementRepository.getStatus())
     val status = _status.asStateFlow()
 
+    init {
+        refreshStatus()
+    }
+
+    fun refreshStatus() {
+        val current = enforcementRepository.getStatus()
+        val isDo = enforcementRepository.isDeviceOwner()
+        
+        val next = when {
+            !isDo -> EnforcementStatus.NOT_DEVICE_OWNER
+            current == EnforcementStatus.NOT_DEVICE_OWNER -> EnforcementStatus.DEVICE_OWNER_READY
+            current == EnforcementStatus.IDLE -> EnforcementStatus.DEVICE_OWNER_READY
+            else -> current
+        }
+        
+        if (next != current) {
+            updateStatus(next)
+        }
+    }
+
     suspend fun startEnforcement() {
         Log.d(TAG, "Starting enforcement for $userId")
         
@@ -63,6 +83,14 @@ class EnforcementCoordinator(
 
     suspend fun stopEnforcement() {
         Log.d(TAG, "Stopping enforcement for $userId")
+
+        // Check for device ownership
+        val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
+        if (currentOwner != userId) {
+            Log.w(TAG, "Cannot stop: Device enforcement is owned by $currentOwner")
+            return
+        }
+
         val ledger = enforcementRepository.getLedger()
         
         val result = strategy.release(ledger)
@@ -78,6 +106,14 @@ class EnforcementCoordinator(
 
     suspend fun reconcile() {
         Log.d(TAG, "Reconciling enforcement for $userId")
+
+        // Check for device ownership
+        val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
+        if (currentOwner != userId) {
+            Log.w(TAG, "Cannot reconcile: Device enforcement is owned by $currentOwner")
+            return
+        }
+
         val snapshot = enforcementRepository.getSnapshot()
         if (snapshot == null) {
             Log.d(TAG, "No active session to reconcile")
@@ -101,7 +137,7 @@ class EnforcementCoordinator(
             }
             EnforcementResult.PartialFailure -> EnforcementStatus.ENFORCEMENT_DEGRADED
             EnforcementResult.Failure -> EnforcementStatus.ENFORCEMENT_FAILED
-            EnforcementResult.Unavailable -> EnforcementStatus.ENFORCEMENT_UNAVAILABLE
+            EnforcementResult.Unavailable -> EnforcementStatus.ENFORCEMENT_FAILED
         }
         updateStatus(newStatus)
     }

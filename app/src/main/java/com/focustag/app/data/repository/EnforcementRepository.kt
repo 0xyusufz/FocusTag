@@ -2,6 +2,7 @@ package com.focustag.app.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.app.admin.DevicePolicyManager
 import com.focustag.app.data.model.EnforcementLedger
 import com.focustag.app.data.model.EnforcementSnapshot
 import com.focustag.app.data.model.EnforcementStatus
@@ -9,6 +10,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class EnforcementRepository(private val context: Context, private val userId: String) {
+
+    private val dpm: DevicePolicyManager by lazy {
+        context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    }
 
     private val userPrefs: SharedPreferences by lazy {
         context.getSharedPreferences("focus_prefs_$userId", Context.MODE_PRIVATE)
@@ -78,5 +83,9 @@ class EnforcementRepository(private val context: Context, private val userId: St
 
     fun setDeviceEnforcementOwnerId(ownerId: String?) {
         devicePrefs.edit().putString(KEY_DEVICE_OWNER_ID, ownerId).apply()
+    }
+
+    fun isDeviceOwner(): Boolean {
+        return dpm.isDeviceOwnerApp(context.packageName)
     }
 }

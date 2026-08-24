@@ -5,11 +5,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class EnforcementStatus {
     IDLE,
+    NOT_DEVICE_OWNER,
+    DEVICE_OWNER_READY,
     ENFORCEMENT_SIMULATED,
     ENFORCEMENT_ACTIVE,
     ENFORCEMENT_DEGRADED,
     ENFORCEMENT_FAILED,
-    ENFORCEMENT_UNAVAILABLE,
+    ENFORCEMENT_LOST,
     CLEANUP_PENDING
 }
 

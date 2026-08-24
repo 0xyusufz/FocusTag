@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">FocusTag</string>
+    <string name="accessibility_service_description">FocusTag uses accessibility to detect when you open distracting apps while in Focus Mode.</string>
 </resources>

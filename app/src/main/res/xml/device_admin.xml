@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin>
+    <uses-policies>
+        <!-- Initially empty for Phase 5B-1. Policies like force-lock, reset-password etc. are not needed yet. -->
+    </uses-policies>
+</device-admin>
