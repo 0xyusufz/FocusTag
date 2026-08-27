@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focustag.app.data.model.FocusSessionState
 import com.focustag.app.data.model.FocusState
@@ -35,7 +35,6 @@ import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.domain.AccessibilityEnforcementStrategy
 import com.focustag.app.domain.EnforcementCoordinator
-import com.focustag.app.domain.NoOpEnforcementStrategy
 import com.focustag.app.ui.apps.AppSelectionScreen
 import com.focustag.app.ui.apps.AppSelectionViewModel
 import com.focustag.app.ui.auth.AuthViewModel
@@ -46,12 +45,20 @@ import com.focustag.app.ui.focus.FocusViewModel
 import com.focustag.app.ui.profile.ProfileScreen
 import com.focustag.app.ui.profile.ProfileViewModel
 import com.focustag.app.ui.theme.FocusTagTheme
+import com.focustag.app.util.NfcController
 import io.github.jan.supabase.auth.handleDeeplinks
 import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var nfcController: NfcController
+    private var activeFocusViewModel: FocusViewModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        nfcController = NfcController(this)
         SupabaseModule.client.handleDeeplinks(intent)
         enableEdgeToEdge()
         setContent {
@@ -121,6 +128,8 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else null
+                    
+                    activeFocusViewModel = focusViewModel
 
                     val focusSessionState by focusViewModel?.focusState?.collectAsState(initial = FocusSessionState()) ?: remember { mutableStateOf(FocusSessionState()) }
                     val isFocusActive = focusSessionState.focusState == FocusState.FOCUS_ACTIVE
@@ -135,6 +144,7 @@ class MainActivity : ComponentActivity() {
                             profileViewModel.loadProfile(userId, email)
                             focusViewModel?.refreshEnforcementStatus()
                             focusViewModel?.refreshAccessibilityCapability()
+                            focusViewModel?.refreshNfcCapability()
                         } else {
                             currentScreen = "home"
                         }
@@ -144,6 +154,7 @@ class MainActivity : ComponentActivity() {
                         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                                 focusViewModel?.refreshAccessibilityCapability()
+                                focusViewModel?.refreshNfcCapability()
                             }
                         }
                         lifecycle.addObserver(observer)
@@ -199,6 +210,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        nfcController.enableReaderMode { tagId ->
+            lifecycleScope.launch(Dispatchers.Main) {
+                activeFocusViewModel?.onTagEvent(tagId)
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nfcController.disableReaderMode()
     }
 
     override fun onNewIntent(intent: Intent) {

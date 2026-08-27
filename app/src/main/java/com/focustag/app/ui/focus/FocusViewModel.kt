@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.focustag.app.data.model.AccessibilityCapability
 import com.focustag.app.data.model.FocusState
+import com.focustag.app.data.model.NfcCapability
 import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.domain.EnforcementCoordinator
 import com.focustag.app.domain.FocusStateEngine
 import com.focustag.app.util.AccessibilityCapabilityChecker
+import com.focustag.app.util.NfcCapabilityChecker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -26,6 +28,9 @@ class FocusViewModel(
     private val _accessibilityCapability = MutableStateFlow(AccessibilityCapability.ACCESSIBILITY_UNAVAILABLE)
     val accessibilityCapability = _accessibilityCapability.asStateFlow()
 
+    private val _nfcCapability = MutableStateFlow(NfcCapability.NFC_UNAVAILABLE)
+    val nfcCapability = _nfcCapability.asStateFlow()
+
     private val _isTransitioning = MutableStateFlow(false)
     val isTransitioning = _isTransitioning.asStateFlow()
 
@@ -33,6 +38,7 @@ class FocusViewModel(
 
     init {
         refreshAccessibilityCapability()
+        refreshNfcCapability()
         
         // Initial reconciliation if app was killed while ACTIVE
         viewModelScope.launch {
@@ -67,19 +73,31 @@ class FocusViewModel(
         }
     }
 
+    fun refreshNfcCapability() {
+        _nfcCapability.update {
+            NfcCapabilityChecker.checkNfcCapability(context)
+        }
+    }
+
     fun refreshEnforcementStatus() {
         val isReady = _accessibilityCapability.value == AccessibilityCapability.ACCESSIBILITY_READY
         enforcementCoordinator.refreshStatus(isReady)
     }
 
     fun onSimulatedTagTap() {
+        onTagEvent("simulated_tag_01")
+    }
+
+    fun onTagEvent(tagId: String) {
         if (_isTransitioning.value) return
 
         val currentState = _focusState.value
-        // Use a fixed simulated tag ID for Phase 4
-        val simulatedTagId = "simulated_tag_01"
+        val nextState = FocusStateEngine.calculateNextState(currentState, tagId)
         
-        val nextState = FocusStateEngine.calculateNextState(currentState, simulatedTagId)
+        // If engine returned same state, likely a tag mismatch during ACTIVE
+        if (nextState == currentState) {
+            return
+        }
         
         // Guard: If transitioning to ACTIVE, require accessibility to be READY
         if (nextState.focusState == FocusState.FOCUS_ACTIVE && 

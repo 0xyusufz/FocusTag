@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.focustag.app.data.model.AccessibilityCapability
 import com.focustag.app.data.model.EnforcementStatus
 import com.focustag.app.data.model.FocusState
+import com.focustag.app.data.model.NfcCapability
 import com.focustag.app.ui.focus.FocusViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
 
@@ -45,6 +47,7 @@ fun HomeScreen(
     val enforcementStatus by focusViewModel.enforcementStatus.collectAsState()
     val isTransitioning by focusViewModel.isTransitioning.collectAsState()
     val accessibilityCapability by focusViewModel.accessibilityCapability.collectAsState()
+    val nfcCapability by focusViewModel.nfcCapability.collectAsState()
     
     val context = LocalContext.current
 
@@ -152,6 +155,21 @@ fun HomeScreen(
                     fontWeight = FontWeight.Medium
                 )
 
+                // NFC Capability Display
+                val isNfcReady = nfcCapability == NfcCapability.NFC_READY
+                val isNfcOff = nfcCapability == NfcCapability.NFC_OFF
+                
+                Text(
+                    text = when (nfcCapability) {
+                        NfcCapability.NFC_READY -> "Trigger: NFC ready"
+                        NfcCapability.NFC_OFF -> "Trigger: NFC is off"
+                        NfcCapability.NFC_UNAVAILABLE -> "Trigger: NFC hardware unavailable"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isNfcReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Medium
+                )
+
                 if (!isAccessibilityReady) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
@@ -162,6 +180,19 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Enable Accessibility")
+                    }
+                }
+
+                if (isNfcOff) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val intent = android.content.Intent(Settings.ACTION_NFC_SETTINGS)
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Enable NFC")
                     }
                 }
 

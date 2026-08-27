@@ -22,6 +22,13 @@ enum class AccessibilityCapability {
 }
 
 @Serializable
+enum class NfcCapability {
+    NFC_UNAVAILABLE,
+    NFC_OFF,
+    NFC_READY
+}
+
+@Serializable
 enum class EnforcementMechanism {
     NO_OP,
     DEVICE_OWNER,

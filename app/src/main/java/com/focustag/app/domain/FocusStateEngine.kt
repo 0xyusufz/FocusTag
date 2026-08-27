@@ -12,19 +12,23 @@ object FocusStateEngine {
     fun calculateNextState(currentState: FocusSessionState, tagId: String?): FocusSessionState {
         return when (currentState.focusState) {
             FocusState.NORMAL -> {
-                // Activate Focus Mode
+                // Activate Focus Mode with the physical/simulated tag ID
                 FocusSessionState(
                     focusState = FocusState.FOCUS_ACTIVE,
                     activeTagId = tagId
                 )
             }
             FocusState.FOCUS_ACTIVE -> {
-                // Deactivate Focus Mode
-                // In future phases, we may check if tagId matches activeTagId
-                FocusSessionState(
-                    focusState = FocusState.NORMAL,
-                    activeTagId = null
-                )
+                // Deactivate Focus Mode ONLY if same tag is used
+                if (tagId == currentState.activeTagId) {
+                    FocusSessionState(
+                        focusState = FocusState.NORMAL,
+                        activeTagId = null
+                    )
+                } else {
+                    // Mismatched tag: remain ACTIVE
+                    currentState
+                }
             }
         }
     }
