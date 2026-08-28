@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.focustag.app.data.model.AccessibilityCapability
 import com.focustag.app.data.model.FocusState
 import com.focustag.app.data.model.NfcCapability
+import com.focustag.app.data.model.SessionStatus
 import com.focustag.app.data.repository.FocusRepository
+import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.domain.EnforcementCoordinator
 import com.focustag.app.domain.FocusStateEngine
 import com.focustag.app.util.AccessibilityCapabilityChecker
@@ -19,6 +21,7 @@ import kotlinx.coroutines.launch
 class FocusViewModel(
     private val context: Context,
     private val focusRepository: FocusRepository,
+    private val sessionHistoryRepository: SessionHistoryRepository,
     private val enforcementCoordinator: EnforcementCoordinator
 ) : ViewModel() {
 
@@ -50,6 +53,7 @@ class FocusViewModel(
                     _isTransitioning.update { false }
                 }
             } else {
+                enforcementCoordinator.checkAndHandleOrphans()
                 refreshEnforcementStatus()
             }
         }
@@ -114,7 +118,7 @@ class FocusViewModel(
             _isTransitioning.update { true }
             try {
                 if (nextState.focusState == FocusState.FOCUS_ACTIVE) {
-                    enforcementCoordinator.startEnforcement()
+                    enforcementCoordinator.startEnforcement(tagId)
                 } else {
                     enforcementCoordinator.stopEnforcement()
                 }

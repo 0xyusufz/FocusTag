@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.focustag.app.data.model.FocusAction
+import com.focustag.app.data.repository.SessionHistoryRepository
 import java.util.concurrent.atomic.AtomicReference
 
 data class AccessibilitySessionState(
@@ -35,7 +36,11 @@ class FocusTagAccessibilityService : AccessibilityService() {
 
     private var lastInterceptionTime = 0L
     private var lastInteractedPackage: String? = null
-    private val DEBOUNCE_MS = 500L
+    private val ENFORCEMENT_DEBOUNCE_MS = 500L
+
+    private var lastAnalyticsTime = 0L
+    private var lastAnalyticsPackage: String? = null
+    private val ANALYTICS_DEBOUNCE_MS = 2000L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -48,17 +53,28 @@ class FocusTagAccessibilityService : AccessibilityService() {
             if (pkgName.isEmpty() || pkgName == packageName) return
 
             val state = sessionState.get()
-            if (!state.isArmed || state.ownerUserId == null) return
+            if (!state.isArmed || state.ownerUserId == null || state.sessionId == null) return
 
             try {
                 if (state.blockedPackages.contains(pkgName)) {
                     val currentTime = System.currentTimeMillis()
-                    if (pkgName == lastInteractedPackage && (currentTime - lastInterceptionTime) < DEBOUNCE_MS) {
+                    
+                    // 1. ENFORCEMENT DEBOUNCE: Prevents OS loops / jitter
+                    if (pkgName == lastInteractedPackage && (currentTime - lastInterceptionTime) < ENFORCEMENT_DEBOUNCE_MS) {
                         return
                     }
                     
                     Log.i(TAG, "INTERCEPTED: $pkgName. Redirecting to HOME.")
-                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    if (performGlobalAction(GLOBAL_ACTION_HOME)) {
+                        // 2. ANALYTICS DEBOUNCE: Deduplicates launch attempts part of the same intent
+                        if (pkgName != lastAnalyticsPackage || (currentTime - lastAnalyticsTime) >= ANALYTICS_DEBOUNCE_MS) {
+                            SessionHistoryRepository(applicationContext, state.ownerUserId)
+                                .emitInterceptionEvent(state.sessionId, pkgName)
+                            
+                            lastAnalyticsTime = currentTime
+                            lastAnalyticsPackage = pkgName
+                        }
+                    }
                     
                     lastInterceptionTime = currentTime
                     lastInteractedPackage = pkgName

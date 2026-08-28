@@ -32,6 +32,7 @@ import com.focustag.app.data.repository.AppInventoryRepository
 import com.focustag.app.data.repository.AppPolicyRepository
 import com.focustag.app.data.repository.EnforcementRepository
 import com.focustag.app.data.repository.FocusRepository
+import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.domain.AccessibilityEnforcementStrategy
 import com.focustag.app.domain.EnforcementCoordinator
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         nfcController = NfcController(this)
+        SessionHistoryRepository.initCollector(applicationContext)
         SupabaseModule.client.handleDeeplinks(intent)
         enableEdgeToEdge()
         setContent {
@@ -112,16 +114,19 @@ class MainActivity : ComponentActivity() {
                                     val inventoryRepo = AppInventoryRepository(this@MainActivity)
                                     val policyRepo = AppPolicyRepository(this@MainActivity, userId)
                                     val enforcementRepo = EnforcementRepository(this@MainActivity, userId)
+                                    val historyRepo = SessionHistoryRepository(this@MainActivity, userId)
                                     val coordinator = EnforcementCoordinator(
                                         userId = userId,
                                         inventoryRepository = inventoryRepo,
                                         policyRepository = policyRepo,
                                         enforcementRepository = enforcementRepo,
+                                        sessionHistoryRepository = historyRepo,
                                         strategy = AccessibilityEnforcementStrategy()
                                     )
                                     return FocusViewModel(
                                         context = this@MainActivity.applicationContext,
                                         focusRepository = FocusRepository(this@MainActivity, userId),
+                                        sessionHistoryRepository = historyRepo,
                                         enforcementCoordinator = coordinator
                                     ) as T
                                 }

@@ -5,9 +5,12 @@ import com.focustag.app.data.model.EnforcementLedger
 import com.focustag.app.data.model.EnforcementResult
 import com.focustag.app.data.model.EnforcementSnapshot
 import com.focustag.app.data.model.EnforcementStatus
+import com.focustag.app.data.model.FocusSessionRecord
+import com.focustag.app.data.model.SessionStatus
 import com.focustag.app.data.repository.AppInventoryRepository
 import com.focustag.app.data.repository.AppPolicyRepository
 import com.focustag.app.data.repository.EnforcementRepository
+import com.focustag.app.data.repository.SessionHistoryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -20,6 +23,7 @@ class EnforcementCoordinator(
     private val inventoryRepository: AppInventoryRepository,
     private val policyRepository: AppPolicyRepository,
     private val enforcementRepository: EnforcementRepository,
+    private val sessionHistoryRepository: SessionHistoryRepository,
     private val strategy: EnforcementStrategy
 ) {
 
@@ -52,7 +56,7 @@ class EnforcementCoordinator(
         }
     }
 
-    suspend fun startEnforcement() {
+    suspend fun startEnforcement(tagId: String? = null) {
         Log.d(TAG, "Starting enforcement for $userId")
         
         // Check for device owner conflict
@@ -80,10 +84,24 @@ class EnforcementCoordinator(
         enforcementRepository.saveSnapshot(snapshot)
         enforcementRepository.setDeviceEnforcementOwnerId(userId)
         
-        // 4. Invoke Strategy
+        // 4. Create history record
+        try {
+            val record = FocusSessionRecord(
+                sessionId = snapshot.sessionId,
+                userId = userId,
+                tagId = tagId,
+                startAt = snapshot.timestamp,
+                status = SessionStatus.IN_PROGRESS
+            )
+            sessionHistoryRepository.createSession(record)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create session history record: ${e.message}")
+        }
+
+        // 5. Invoke Strategy
         val result = strategy.apply(snapshot)
         
-        // 5. Update Status and Ledger
+        // 6. Update Status and Ledger
         handleEnforcementResult(result)
     }
 
@@ -97,10 +115,24 @@ class EnforcementCoordinator(
             return
         }
 
+        val snapshot = enforcementRepository.getSnapshot()
         val ledger = enforcementRepository.getLedger()
         
         val result = strategy.release(ledger)
         if (result is EnforcementResult.Success || result is EnforcementResult.Simulated) {
+            // Commit history record
+            try {
+                snapshot?.let {
+                    sessionHistoryRepository.completeSession(
+                        sessionId = it.sessionId,
+                        status = SessionStatus.COMPLETED,
+                        endAt = System.currentTimeMillis()
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to commit session history: ${e.message}")
+            }
+
             enforcementRepository.saveLedger(EnforcementLedger())
             enforcementRepository.saveSnapshot(null)
             enforcementRepository.setDeviceEnforcementOwnerId(null)
@@ -129,6 +161,30 @@ class EnforcementCoordinator(
         val ledger = enforcementRepository.getLedger()
         val result = strategy.reconcile(snapshot, ledger)
         handleEnforcementResult(result)
+    }
+
+    /**
+     * Checks if there's an active enforcement snapshot but the focus state is NORMAL.
+     * If so, marks the historical session as INTERRUPTED and cleans up.
+     */
+    suspend fun checkAndHandleOrphans() {
+        val snapshot = enforcementRepository.getSnapshot()
+        val owner = enforcementRepository.getDeviceEnforcementOwnerId()
+        
+        if (snapshot != null && owner == userId) {
+            Log.i(TAG, "Orphaned session detected for $userId. Cleaning up.")
+            try {
+                sessionHistoryRepository.interruptSession(snapshot.sessionId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to mark orphan session in history: ${e.message}")
+            }
+            
+            // Clean up state
+            enforcementRepository.saveLedger(EnforcementLedger())
+            enforcementRepository.saveSnapshot(null)
+            enforcementRepository.setDeviceEnforcementOwnerId(null)
+            updateStatus(EnforcementStatus.IDLE)
+        }
     }
 
     private fun handleEnforcementResult(result: EnforcementResult) {
