@@ -148,25 +148,35 @@ class EnforcementCoordinator(
         }
     }
 
-    suspend fun reconcile() = globalMutex.withLock {
-        Log.d(TAG, "Reconciling enforcement for $userId")
+    suspend fun reconcile() {
+        Log.d(TAG, "Reconciling enforcement for $userId - entry")
+        
+        Log.d(TAG, "Reconciling enforcement for $userId - waiting for lock")
+        globalMutex.withLock {
+            Log.d(TAG, "Reconciling enforcement for $userId - lock acquired")
 
-        // Check for device ownership
-        val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
-        if (currentOwner != userId) {
-            Log.w(TAG, "Cannot reconcile: Device enforcement is owned by $currentOwner")
-            return@withLock
+            // Check for device ownership
+            val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
+            if (currentOwner != userId) {
+                Log.w(TAG, "Cannot reconcile: Device enforcement is owned by $currentOwner")
+                return@withLock
+            }
+
+            val snapshot = enforcementRepository.getSnapshot()
+            if (snapshot == null) {
+                Log.d(TAG, "No active session to reconcile")
+                return@withLock
+            }
+
+            val ledger = enforcementRepository.getLedger()
+            
+            Log.d(TAG, "Reconciling enforcement for $userId - strategy start")
+            val result = strategy.reconcile(snapshot, ledger)
+            Log.d(TAG, "Reconciling enforcement for $userId - strategy end")
+            
+            handleEnforcementResult(result)
+            Log.d(TAG, "Reconciling enforcement for $userId - state published")
         }
-
-        val snapshot = enforcementRepository.getSnapshot()
-        if (snapshot == null) {
-            Log.d(TAG, "No active session to reconcile")
-            return@withLock
-        }
-
-        val ledger = enforcementRepository.getLedger()
-        val result = strategy.reconcile(snapshot, ledger)
-        handleEnforcementResult(result)
     }
 
     /**

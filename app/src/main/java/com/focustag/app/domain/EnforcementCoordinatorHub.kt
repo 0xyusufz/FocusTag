@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  */
 object EnforcementCoordinatorHub {
     private const val TAG = "EnforcementHub"
-    private val hubScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val hubScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Map of userId to Coordinator to ensure user isolation
     private val coordinators = mutableMapOf<String, EnforcementCoordinator>()
