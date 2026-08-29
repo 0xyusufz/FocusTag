@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 class FocusViewModel(
     private val context: Context,
     private val focusRepository: FocusRepository,
-    private val sessionHistoryRepository: SessionHistoryRepository,
     private val enforcementCoordinator: EnforcementCoordinator
 ) : ViewModel() {
 

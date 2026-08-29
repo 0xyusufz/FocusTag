@@ -5,6 +5,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.focustag.app.data.model.FocusAction
 import com.focustag.app.data.repository.SessionHistoryRepository
+import com.focustag.app.domain.EnforcementCoordinatorHub
 import java.util.concurrent.atomic.AtomicReference
 
 data class AccessibilitySessionState(
@@ -45,6 +46,7 @@ class FocusTagAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "FocusTag AccessibilityService successfully connected")
+        EnforcementCoordinatorHub.requestHeadlessReconcile(applicationContext)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {

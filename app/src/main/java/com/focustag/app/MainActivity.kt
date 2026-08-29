@@ -36,6 +36,7 @@ import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.domain.AccessibilityEnforcementStrategy
 import com.focustag.app.domain.EnforcementCoordinator
+import com.focustag.app.domain.EnforcementCoordinatorHub
 import com.focustag.app.ui.apps.AppSelectionScreen
 import com.focustag.app.ui.apps.AppSelectionViewModel
 import com.focustag.app.ui.auth.AuthViewModel
@@ -111,22 +112,10 @@ class MainActivity : ComponentActivity() {
                             factory = object : ViewModelProvider.Factory {
                                 @Suppress("UNCHECKED_CAST")
                                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    val inventoryRepo = AppInventoryRepository(this@MainActivity)
-                                    val policyRepo = AppPolicyRepository(this@MainActivity, userId)
-                                    val enforcementRepo = EnforcementRepository(this@MainActivity, userId)
-                                    val historyRepo = SessionHistoryRepository(this@MainActivity, userId)
-                                    val coordinator = EnforcementCoordinator(
-                                        userId = userId,
-                                        inventoryRepository = inventoryRepo,
-                                        policyRepository = policyRepo,
-                                        enforcementRepository = enforcementRepo,
-                                        sessionHistoryRepository = historyRepo,
-                                        strategy = AccessibilityEnforcementStrategy()
-                                    )
+                                    val coordinator = EnforcementCoordinatorHub.getCoordinator(this@MainActivity, userId)
                                     return FocusViewModel(
                                         context = this@MainActivity.applicationContext,
                                         focusRepository = FocusRepository(this@MainActivity, userId),
-                                        sessionHistoryRepository = historyRepo,
                                         enforcementCoordinator = coordinator
                                     ) as T
                                 }

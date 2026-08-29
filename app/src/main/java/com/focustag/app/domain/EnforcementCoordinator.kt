@@ -14,6 +14,8 @@ import com.focustag.app.data.repository.SessionHistoryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 private const val TAG = "EnforcementCoord"
@@ -26,6 +28,10 @@ class EnforcementCoordinator(
     private val sessionHistoryRepository: SessionHistoryRepository,
     private val strategy: EnforcementStrategy
 ) {
+
+    companion object {
+        private val globalMutex = Mutex()
+    }
 
     private val _status = MutableStateFlow(enforcementRepository.getStatus())
     val status = _status.asStateFlow()
@@ -56,7 +62,7 @@ class EnforcementCoordinator(
         }
     }
 
-    suspend fun startEnforcement(tagId: String? = null) {
+    suspend fun startEnforcement(tagId: String? = null) = globalMutex.withLock {
         Log.d(TAG, "Starting enforcement for $userId")
         
         // Check for device owner conflict
@@ -64,7 +70,7 @@ class EnforcementCoordinator(
         if (currentOwner != null && currentOwner != userId) {
             Log.e(TAG, "Device enforcement already owned by $currentOwner")
             updateStatus(EnforcementStatus.ENFORCEMENT_FAILED)
-            return
+            return@withLock
         }
 
         // 1. Resolve Phase 3 policy
@@ -105,14 +111,14 @@ class EnforcementCoordinator(
         handleEnforcementResult(result)
     }
 
-    suspend fun stopEnforcement() {
+    suspend fun stopEnforcement() = globalMutex.withLock {
         Log.d(TAG, "Stopping enforcement for $userId")
 
         // Check for device ownership
         val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
         if (currentOwner != userId) {
             Log.w(TAG, "Cannot stop: Device enforcement is owned by $currentOwner")
-            return
+            return@withLock
         }
 
         val snapshot = enforcementRepository.getSnapshot()
@@ -142,20 +148,20 @@ class EnforcementCoordinator(
         }
     }
 
-    suspend fun reconcile() {
+    suspend fun reconcile() = globalMutex.withLock {
         Log.d(TAG, "Reconciling enforcement for $userId")
 
         // Check for device ownership
         val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
         if (currentOwner != userId) {
             Log.w(TAG, "Cannot reconcile: Device enforcement is owned by $currentOwner")
-            return
+            return@withLock
         }
 
         val snapshot = enforcementRepository.getSnapshot()
         if (snapshot == null) {
             Log.d(TAG, "No active session to reconcile")
-            return
+            return@withLock
         }
 
         val ledger = enforcementRepository.getLedger()
@@ -167,7 +173,7 @@ class EnforcementCoordinator(
      * Checks if there's an active enforcement snapshot but the focus state is NORMAL.
      * If so, marks the historical session as INTERRUPTED and cleans up.
      */
-    suspend fun checkAndHandleOrphans() {
+    suspend fun checkAndHandleOrphans() = globalMutex.withLock {
         val snapshot = enforcementRepository.getSnapshot()
         val owner = enforcementRepository.getDeviceEnforcementOwnerId()
         
