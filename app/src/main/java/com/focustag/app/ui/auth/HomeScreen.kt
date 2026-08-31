@@ -258,7 +258,7 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(
-            onClick = authViewModel::signOut,
+            onClick = { authViewModel.signOut(context) },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isFocusActive
         ) {

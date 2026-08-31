@@ -1,9 +1,11 @@
 package com.focustag.app.ui.auth
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.focustag.app.data.repository.AuthRepository
+import com.focustag.app.data.worker.SyncScheduler
 import io.github.jan.supabase.auth.exception.AuthErrorCode
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -103,8 +105,10 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    fun signOut() {
+    fun signOut(context: Context) {
+        val userId = (sessionStatus.value as? SessionStatus.Authenticated)?.session?.user?.id
         viewModelScope.launch {
+            userId?.let { SyncScheduler.cancelSync(context.applicationContext, it) }
             repository.signOut()
         }
     }

@@ -5,6 +5,7 @@ import android.util.Log
 import com.focustag.app.data.model.FocusSessionRecord
 import com.focustag.app.data.model.InterceptionEvent
 import com.focustag.app.data.model.SessionStatus
+import com.focustag.app.data.worker.SyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,26 +70,29 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session created in history: ${record.sessionId}")
+        SyncScheduler.scheduleSync(context, userId)
     }
 
     suspend fun completeSession(sessionId: String, status: SessionStatus, endAt: Long) = writeMutex.withLock {
         val sessions = getSessions().map {
             if (it.sessionId == sessionId) {
-                it.copy(status = status, endAt = endAt)
+                it.copy(status = status, endAt = endAt, syncDirty = true)
             } else it
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session completed in history: $sessionId with status $status")
+        SyncScheduler.scheduleSync(context, userId)
     }
 
     suspend fun interruptSession(sessionId: String) = writeMutex.withLock {
         val sessions = getSessions().map {
             if (it.sessionId == sessionId && it.status == SessionStatus.IN_PROGRESS) {
-                it.copy(status = SessionStatus.INTERRUPTED)
+                it.copy(status = SessionStatus.INTERRUPTED, syncDirty = true)
             } else it
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session interrupted in history: $sessionId")
+        SyncScheduler.scheduleSync(context, userId)
     }
 
     fun getSessions(): List<FocusSessionRecord> {
@@ -100,13 +104,27 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
     }
 
+    fun getDirtySessions(): List<FocusSessionRecord> {
+        return getSessions().filter { it.syncDirty }
+    }
+
+    suspend fun markSessionSynced(sessionId: String) = writeMutex.withLock {
+        val sessions = getSessions().map {
+            if (it.sessionId == sessionId) {
+                it.copy(syncDirty = false)
+            } else it
+        }
+        prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
+    }
+
     fun emitInterceptionEvent(sessionId: String, packageName: String) {
         val event = InterceptionEvent(
             eventId = UUID.randomUUID().toString(),
             sessionId = sessionId,
             userId = userId,
             packageName = packageName,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            syncDirty = true
         )
         val success = interceptionEvents.tryEmit(event)
         if (!success) {
@@ -123,6 +141,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
         prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
         Log.d(TAG, "Event persisted: ${event.packageName} for session ${event.sessionId}")
+        SyncScheduler.scheduleSync(context, userId)
     }
 
     fun getEvents(): List<InterceptionEvent> {
@@ -132,5 +151,18 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    fun getDirtyEvents(): List<InterceptionEvent> {
+        return getEvents().filter { it.syncDirty }
+    }
+
+    suspend fun markEventSynced(eventId: String) = writeMutex.withLock {
+        val events = getEvents().map {
+            if (it.eventId == eventId) {
+                it.copy(syncDirty = false)
+            } else it
+        }
+        prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
     }
 }

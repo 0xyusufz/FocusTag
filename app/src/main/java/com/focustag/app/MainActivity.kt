@@ -34,6 +34,7 @@ import com.focustag.app.data.repository.EnforcementRepository
 import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.data.supabase.SupabaseModule
+import com.focustag.app.data.worker.SyncScheduler
 import com.focustag.app.domain.AccessibilityEnforcementStrategy
 import com.focustag.app.domain.EnforcementCoordinator
 import com.focustag.app.domain.EnforcementCoordinatorHub
@@ -139,6 +140,7 @@ class MainActivity : ComponentActivity() {
                             focusViewModel?.refreshEnforcementStatus()
                             focusViewModel?.refreshAccessibilityCapability()
                             focusViewModel?.refreshNfcCapability()
+                            SyncScheduler.scheduleSync(this@MainActivity, userId)
                         } else {
                             currentScreen = "home"
                         }
@@ -149,6 +151,8 @@ class MainActivity : ComponentActivity() {
                             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                                 focusViewModel?.refreshAccessibilityCapability()
                                 focusViewModel?.refreshNfcCapability()
+                                val userId = (sessionStatus as? SessionStatus.Authenticated)?.session?.user?.id
+                                userId?.let { SyncScheduler.scheduleSync(this@MainActivity, it) }
                             }
                         }
                         lifecycle.addObserver(observer)

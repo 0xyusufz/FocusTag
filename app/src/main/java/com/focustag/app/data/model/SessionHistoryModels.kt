@@ -16,7 +16,8 @@ data class FocusSessionRecord(
     val tagId: String?,
     val startAt: Long,
     val endAt: Long? = null,
-    val status: SessionStatus
+    val status: SessionStatus,
+    val syncDirty: Boolean = true
 )
 
 @Serializable
@@ -25,5 +26,6 @@ data class InterceptionEvent(
     val sessionId: String,
     val userId: String,
     val packageName: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val syncDirty: Boolean = true
 )
