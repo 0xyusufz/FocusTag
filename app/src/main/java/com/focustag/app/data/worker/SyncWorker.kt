@@ -17,10 +17,21 @@ class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
         
         Log.d(TAG, "SyncWorker started for user: $userId")
 
-        // Verify current user
-        val currentUserId = SupabaseModule.client.auth.currentSessionOrNull()?.user?.id
+        // 1. Authentication Verification / Recovery
+        var currentUserId = SupabaseModule.client.auth.currentSessionOrNull()?.user?.id
+        
+        if (currentUserId == null) {
+            try {
+                Log.d(TAG, "SyncWorker: Session missing or expired, attempting refresh...")
+                SupabaseModule.client.auth.refreshCurrentSession()
+                currentUserId = SupabaseModule.client.auth.currentSessionOrNull()?.user?.id
+            } catch (e: Exception) {
+                Log.w(TAG, "SyncWorker: Auth refresh failed: ${e.message}")
+            }
+        }
+
         if (currentUserId != userId) {
-            Log.w(TAG, "SyncWorker: User mismatch or not authenticated. input=$userId, current=$currentUserId")
+            Log.w(TAG, "SyncWorker: User mismatch or unauthenticated. input=$userId, current=$currentUserId")
             return Result.failure()
         }
 
@@ -28,7 +39,30 @@ class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
         val remoteRepo = SupabaseHistoryRepository()
 
         try {
-            // 1. Sync Sessions first (Parent)
+            var syncFailed = false
+
+            // 2. DOWNSTREAM SYNC: Cloud -> Local
+            // Fetch and merge sessions first to maintain parent-child order
+            val sessionsResult = remoteRepo.fetchSessions(userId)
+            if (sessionsResult.isSuccess) {
+                localRepo.mergeCloudSessions(sessionsResult.getOrThrow())
+                Log.d(TAG, "Cloud sessions merged locally")
+            } else {
+                Log.e(TAG, "Failed to fetch cloud sessions: ${sessionsResult.exceptionOrNull()?.message}")
+                syncFailed = true
+            }
+
+            val eventsResult = remoteRepo.fetchEvents(userId)
+            if (eventsResult.isSuccess) {
+                localRepo.mergeCloudEvents(eventsResult.getOrThrow())
+                Log.d(TAG, "Cloud events merged locally")
+            } else {
+                Log.e(TAG, "Failed to fetch cloud events: ${eventsResult.exceptionOrNull()?.message}")
+                syncFailed = true
+            }
+
+            // 3. UPSTREAM SYNC: Local -> Cloud
+            // Sessions first
             val dirtySessions = localRepo.getDirtySessions()
             for (session in dirtySessions) {
                 val result = remoteRepo.upsertSession(session)
@@ -36,13 +70,12 @@ class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
                     localRepo.markSessionSynced(session.sessionId)
                     Log.d(TAG, "Synced session: ${session.sessionId}")
                 } else {
-                    val error = result.exceptionOrNull()?.message
-                    Log.e(TAG, "Failed to sync session ${session.sessionId}: $error")
-                    // If it's a persistent error, we might want to return failure or retry
+                    Log.e(TAG, "Failed to sync session ${session.sessionId}: ${result.exceptionOrNull()?.message}")
+                    syncFailed = true
                 }
             }
 
-            // 2. Sync Events (Children)
+            // Events second
             val dirtyEvents = localRepo.getDirtyEvents()
             for (event in dirtyEvents) {
                 val result = remoteRepo.upsertEvent(event)
@@ -50,12 +83,17 @@ class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
                     localRepo.markEventSynced(event.eventId)
                     Log.d(TAG, "Synced event: ${event.eventId}")
                 } else {
-                    val error = result.exceptionOrNull()?.message
-                    Log.e(TAG, "Failed to sync event ${event.eventId}: $error")
+                    Log.e(TAG, "Failed to sync event ${event.eventId}: ${result.exceptionOrNull()?.message}")
+                    syncFailed = true
                 }
             }
 
-            return Result.success()
+            return if (syncFailed) {
+                Log.w(TAG, "SyncWorker: Partial failure during sync. Retrying later.")
+                Result.retry()
+            } else {
+                Result.success()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error in SyncWorker: ${e.message}", e)
             return Result.retry()

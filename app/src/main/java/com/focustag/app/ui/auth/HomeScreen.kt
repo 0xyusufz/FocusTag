@@ -40,7 +40,8 @@ fun HomeScreen(
     authViewModel: AuthViewModel,
     focusViewModel: FocusViewModel,
     onNavigateToProfile: () -> Unit,
-    onNavigateToApps: () -> Unit
+    onNavigateToApps: () -> Unit,
+    onNavigateToHistory: () -> Unit
 ) {
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val focusSessionState by focusViewModel.focusState.collectAsState()
@@ -246,6 +247,16 @@ fun HomeScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         val isFocusActive = focusSessionState.focusState == FocusState.FOCUS_ACTIVE
+
+        OutlinedButton(
+            onClick = onNavigateToHistory,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isFocusActive
+        ) {
+            Text("View History")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = onNavigateToProfile,

@@ -10,6 +10,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,6 +36,17 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         
         // Shared flow for interception events to avoid disk I/O on hot path
         private val interceptionEvents = MutableSharedFlow<InterceptionEvent>(extraBufferCapacity = 100)
+
+        private val sessionFlows = mutableMapOf<String, MutableStateFlow<List<FocusSessionRecord>>>()
+        private val eventFlows = mutableMapOf<String, MutableStateFlow<List<InterceptionEvent>>>()
+
+        private fun getSessionFlow(userId: String) = synchronized(sessionFlows) {
+            sessionFlows.getOrPut(userId) { MutableStateFlow(emptyList()) }
+        }
+
+        private fun getEventFlow(userId: String) = synchronized(eventFlows) {
+            eventFlows.getOrPut(userId) { MutableStateFlow(emptyList()) }
+        }
 
         private var isCollecting = false
 
@@ -59,6 +73,21 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         context.getSharedPreferences("$PREFS_NAME_PREFIX$userId", Context.MODE_PRIVATE)
     }
 
+    private val _sessions = getSessionFlow(userId)
+    val sessions: StateFlow<List<FocusSessionRecord>> = _sessions.asStateFlow()
+
+    private val _events = getEventFlow(userId)
+    val events: StateFlow<List<InterceptionEvent>> = _events.asStateFlow()
+
+    init {
+        updateFlows()
+    }
+
+    private fun updateFlows() {
+        _sessions.value = getSessions()
+        _events.value = getEvents()
+    }
+
     suspend fun createSession(record: FocusSessionRecord) = writeMutex.withLock {
         val sessions = getSessions().toMutableList()
         // Prevent duplicates
@@ -70,6 +99,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session created in history: ${record.sessionId}")
+        updateFlows()
         SyncScheduler.scheduleSync(context, userId)
     }
 
@@ -81,6 +111,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session completed in history: $sessionId with status $status")
+        updateFlows()
         SyncScheduler.scheduleSync(context, userId)
     }
 
@@ -92,6 +123,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session interrupted in history: $sessionId")
+        updateFlows()
         SyncScheduler.scheduleSync(context, userId)
     }
 
@@ -115,6 +147,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
             } else it
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
+        updateFlows()
     }
 
     fun emitInterceptionEvent(sessionId: String, packageName: String) {
@@ -141,6 +174,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         }
         prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
         Log.d(TAG, "Event persisted: ${event.packageName} for session ${event.sessionId}")
+        updateFlows()
         SyncScheduler.scheduleSync(context, userId)
     }
 
@@ -164,5 +198,58 @@ class SessionHistoryRepository(private val context: Context, private val userId:
             } else it
         }
         prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
+        updateFlows()
+    }
+
+    suspend fun mergeCloudSessions(cloudSessions: List<FocusSessionRecord>) = writeMutex.withLock {
+        val localSessions = getSessions().toMutableList()
+        var changed = false
+        
+        cloudSessions.forEach { cloud ->
+            val localIndex = localSessions.indexOfFirst { it.sessionId == cloud.sessionId }
+            if (localIndex == -1) {
+                localSessions.add(cloud)
+                changed = true
+            } else {
+                val local = localSessions[localIndex]
+                if (!local.syncDirty && local != cloud) {
+                    localSessions[localIndex] = cloud
+                    changed = true
+                }
+            }
+        }
+        
+        if (changed) {
+            localSessions.sortByDescending { it.startAt }
+            val finalSessions = if (localSessions.size > MAX_SESSIONS) localSessions.take(MAX_SESSIONS) else localSessions
+            prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(finalSessions)).apply()
+            updateFlows()
+        }
+    }
+
+    suspend fun mergeCloudEvents(cloudEvents: List<InterceptionEvent>) = writeMutex.withLock {
+        val localEvents = getEvents().toMutableList()
+        var changed = false
+        
+        cloudEvents.forEach { cloud ->
+            val localIndex = localEvents.indexOfFirst { it.eventId == cloud.eventId }
+            if (localIndex == -1) {
+                localEvents.add(cloud)
+                changed = true
+            } else {
+                val local = localEvents[localIndex]
+                if (!local.syncDirty && local != cloud) {
+                    localEvents[localIndex] = cloud
+                    changed = true
+                }
+            }
+        }
+        
+        if (changed) {
+            localEvents.sortByDescending { it.timestamp }
+            val finalEvents = if (localEvents.size > 2000) localEvents.take(2000) else localEvents
+            prefs.edit().putString(KEY_EVENTS, Json.encodeToString(finalEvents)).apply()
+            updateFlows()
+        }
     }
 }

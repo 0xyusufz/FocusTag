@@ -34,6 +34,42 @@ class SupabaseHistoryRepository {
         return DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(millis))
     }
 
+    private fun fromIsoString(iso: String): Long {
+        return Instant.parse(iso).toEpochMilli()
+    }
+
+    suspend fun fetchSessions(userId: String): Result<List<FocusSessionRecord>> {
+        return try {
+            val dtos = SupabaseModule.client.postgrest["focus_sessions"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<FocusSessionDto>()
+            val records = dtos.map { FocusSessionRecordMapper.fromDto(it, ::fromIsoString) }
+            Result.success(records)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchEvents(userId: String): Result<List<InterceptionEvent>> {
+        return try {
+            val dtos = SupabaseModule.client.postgrest["interception_events"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<InterceptionEventDto>()
+            val events = dtos.map { InterceptionEventMapper.fromDto(it, ::fromIsoString) }
+            Result.success(events)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun upsertSession(record: FocusSessionRecord): Result<Unit> {
         return try {
             val dto = FocusSessionRecordMapper.toDto(record, ::toIsoString)
@@ -70,6 +106,18 @@ object FocusSessionRecordMapper {
             status = record.status.name
         )
     }
+
+    fun fromDto(dto: FocusSessionDto, dateParser: (String) -> Long): FocusSessionRecord {
+        return FocusSessionRecord(
+            sessionId = dto.id,
+            userId = dto.userId,
+            tagId = dto.tagId,
+            startAt = dateParser(dto.startAt),
+            endAt = dto.endAt?.let { dateParser(it) },
+            status = com.focustag.app.data.model.SessionStatus.valueOf(dto.status),
+            syncDirty = false
+        )
+    }
 }
 
 object InterceptionEventMapper {
@@ -80,6 +128,17 @@ object InterceptionEventMapper {
             sessionId = event.sessionId,
             packageName = event.packageName,
             createdAt = dateTransformer(event.timestamp)
+        )
+    }
+
+    fun fromDto(dto: InterceptionEventDto, dateParser: (String) -> Long): InterceptionEvent {
+        return InterceptionEvent(
+            eventId = dto.id,
+            sessionId = dto.sessionId,
+            userId = dto.userId,
+            packageName = dto.packageName,
+            timestamp = dateParser(dto.createdAt),
+            syncDirty = false
         )
     }
 }
