@@ -2,25 +2,28 @@ package com.focustag.app.data.repository
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import com.focustag.app.data.model.AppCategory
 import com.focustag.app.data.model.AppInfo
 
 open class AppInventoryRepository(private val context: Context?) {
 
-    private val restrictedPackages = setOf(
+    private val alwaysRestrictedPackages = setOf(
+        "com.android.settings",
+        "com.android.vending", // Play Store
+        "com.android.chrome",
+        "org.mozilla.firefox",
+        "com.microsoft.emmx", // Edge
+        "com.sec.android.app.sbrowser", // Samsung Internet
+        "com.opera.browser",
+        "com.brave.browser",
         "com.instagram.android",
         "com.zhiliaoapp.musically", // TikTok
         "com.facebook.katana",
         "com.google.android.youtube",
         "com.twitter.android",
         "com.snapchat.android"
-    )
-
-    private val systemRequiredPackages = setOf(
-        "com.android.settings",
-        "com.google.android.packageinstaller",
-        "com.android.systemui"
     )
 
     open fun getInstalledApps(): List<AppInfo> {
@@ -36,12 +39,17 @@ open class AppInventoryRepository(private val context: Context?) {
             val packageName = resolveInfo.activityInfo.packageName
             val appName = resolveInfo.loadLabel(pm).toString()
 
+            val appInfo = try {
+                pm.getApplicationInfo(packageName, 0)
+            } catch (e: PackageManager.NameNotFoundException) {
+                null
+            }
+
             val category = when {
                 packageName == myPackageName -> AppCategory.CORE
-                restrictedPackages.contains(packageName) -> AppCategory.RESTRICTED
-                systemRequiredPackages.contains(packageName) -> AppCategory.SYSTEM_REQUIRED
-                // Heuristic: system apps without classification are UNCLASSIFIED, user apps ALLOWABLE
-                else -> AppCategory.ALLOWABLE
+                alwaysRestrictedPackages.contains(packageName) -> AppCategory.RESTRICTED
+                appInfo?.category == ApplicationInfo.CATEGORY_PRODUCTIVITY -> AppCategory.ALLOWABLE
+                else -> AppCategory.RESTRICTED
             }
 
             AppInfo(packageName, appName, category)
