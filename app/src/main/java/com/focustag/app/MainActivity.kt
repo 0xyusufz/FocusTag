@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -204,6 +205,9 @@ class MainActivity : ComponentActivity() {
                         contentAlignment = Alignment.Center
                     ) {
                         when (sessionStatus) {
+                            is SessionStatus.Initializing -> {
+                                CircularProgressIndicator()
+                            }
                             is SessionStatus.Authenticated -> {
                                 when (currentScreen) {
                                     "dashboard" -> {
