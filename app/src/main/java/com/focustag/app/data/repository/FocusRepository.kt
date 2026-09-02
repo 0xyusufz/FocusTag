@@ -5,10 +5,10 @@ import android.content.SharedPreferences
 import com.focustag.app.data.model.FocusSessionState
 import com.focustag.app.data.model.FocusState
 
-class FocusRepository(private val context: Context, private val userId: String) {
+open class FocusRepository(private val context: Context?, private val userId: String) {
 
     private val prefs: SharedPreferences by lazy {
-        context.getSharedPreferences("focus_prefs_$userId", Context.MODE_PRIVATE)
+        context!!.getSharedPreferences("focus_prefs_$userId", Context.MODE_PRIVATE)
     }
 
     private companion object {
@@ -16,7 +16,7 @@ class FocusRepository(private val context: Context, private val userId: String) 
         const val KEY_ACTIVE_TAG_ID = "active_tag_id"
     }
 
-    fun getFocusSessionState(): FocusSessionState {
+    open fun getFocusSessionState(): FocusSessionState {
         val stateName = prefs.getString(KEY_FOCUS_STATE, FocusState.NORMAL.name) ?: FocusState.NORMAL.name
         val focusState = try {
             FocusState.valueOf(stateName)
@@ -27,7 +27,7 @@ class FocusRepository(private val context: Context, private val userId: String) 
         return FocusSessionState(focusState, activeTagId)
     }
 
-    fun saveFocusSessionState(state: FocusSessionState) {
+    open fun saveFocusSessionState(state: FocusSessionState) {
         prefs.edit().apply {
             putString(KEY_FOCUS_STATE, state.focusState.name)
             putString(KEY_ACTIVE_TAG_ID, state.activeTagId)

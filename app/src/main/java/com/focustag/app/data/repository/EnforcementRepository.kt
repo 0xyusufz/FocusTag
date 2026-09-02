@@ -9,18 +9,18 @@ import com.focustag.app.data.model.EnforcementStatus
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-class EnforcementRepository(private val context: Context, private val userId: String) {
+open class EnforcementRepository(private val context: Context?, private val userId: String) {
 
     private val dpm: DevicePolicyManager by lazy {
-        context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        context!!.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     }
 
     private val userPrefs: SharedPreferences by lazy {
-        context.getSharedPreferences("focus_prefs_$userId", Context.MODE_PRIVATE)
+        context!!.getSharedPreferences("focus_prefs_$userId", Context.MODE_PRIVATE)
     }
 
     private val devicePrefs: SharedPreferences by lazy {
-        context.getSharedPreferences("device_focus_state", Context.MODE_PRIVATE)
+        context!!.getSharedPreferences("device_focus_state", Context.MODE_PRIVATE)
     }
 
     private companion object {
@@ -30,7 +30,7 @@ class EnforcementRepository(private val context: Context, private val userId: St
         const val KEY_DEVICE_OWNER_ID = "active_enforcement_user_id"
     }
 
-    fun getSnapshot(): EnforcementSnapshot? {
+    open fun getSnapshot(): EnforcementSnapshot? {
         val json = userPrefs.getString(KEY_SNAPSHOT, null) ?: return null
         return try {
             Json.decodeFromString<EnforcementSnapshot>(json)
@@ -39,7 +39,7 @@ class EnforcementRepository(private val context: Context, private val userId: St
         }
     }
 
-    fun saveSnapshot(snapshot: EnforcementSnapshot?) {
+    open fun saveSnapshot(snapshot: EnforcementSnapshot?) {
         userPrefs.edit().apply {
             if (snapshot == null) {
                 remove(KEY_SNAPSHOT)
@@ -50,7 +50,7 @@ class EnforcementRepository(private val context: Context, private val userId: St
         }
     }
 
-    fun getLedger(): EnforcementLedger {
+    open fun getLedger(): EnforcementLedger {
         val json = userPrefs.getString(KEY_LEDGER, null) ?: return EnforcementLedger()
         return try {
             Json.decodeFromString<EnforcementLedger>(json)
@@ -59,11 +59,11 @@ class EnforcementRepository(private val context: Context, private val userId: St
         }
     }
 
-    fun saveLedger(ledger: EnforcementLedger) {
+    open fun saveLedger(ledger: EnforcementLedger) {
         userPrefs.edit().putString(KEY_LEDGER, Json.encodeToString(ledger)).apply()
     }
 
-    fun getStatus(): EnforcementStatus {
+    open fun getStatus(): EnforcementStatus {
         val name = userPrefs.getString(KEY_STATUS, EnforcementStatus.IDLE.name) ?: EnforcementStatus.IDLE.name
         return try {
             EnforcementStatus.valueOf(name)
@@ -72,20 +72,20 @@ class EnforcementRepository(private val context: Context, private val userId: St
         }
     }
 
-    fun saveStatus(status: EnforcementStatus) {
+    open fun saveStatus(status: EnforcementStatus) {
         userPrefs.edit().putString(KEY_STATUS, status.name).apply()
     }
 
     // Device-level ownership
-    fun getDeviceEnforcementOwnerId(): String? {
+    open fun getDeviceEnforcementOwnerId(): String? {
         return devicePrefs.getString(KEY_DEVICE_OWNER_ID, null)
     }
 
-    fun setDeviceEnforcementOwnerId(ownerId: String?) {
+    open fun setDeviceEnforcementOwnerId(ownerId: String?) {
         devicePrefs.edit().putString(KEY_DEVICE_OWNER_ID, ownerId).apply()
     }
 
-    fun isDeviceOwner(): Boolean {
-        return dpm.isDeviceOwnerApp(context.packageName)
+    open fun isDeviceOwner(): Boolean {
+        return dpm.isDeviceOwnerApp(context!!.packageName)
     }
 }

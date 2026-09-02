@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import com.focustag.app.data.model.AppCategory
 import com.focustag.app.data.model.AppInfo
 
-class AppInventoryRepository(private val context: Context) {
+open class AppInventoryRepository(private val context: Context?) {
 
     private val restrictedPackages = setOf(
         "com.instagram.android",
@@ -23,8 +23,8 @@ class AppInventoryRepository(private val context: Context) {
         "com.android.systemui"
     )
 
-    fun getInstalledApps(): List<AppInfo> {
-        val pm = context.packageManager
+    open fun getInstalledApps(): List<AppInfo> {
+        val pm = context!!.packageManager
         val intent = Intent(Intent.ACTION_MAIN, null).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
@@ -57,7 +57,7 @@ class AppInventoryRepository(private val context: Context) {
 //import com.focustag.app.data.model.AppCategory
 //import com.focustag.app.data.model.AppInfo
 //
-//class AppInventoryRepository(private val context: Context) {
+//open class AppInventoryRepository(private val context: Context?) {
 //
 //    // A small, unambiguous set of OS/shell apps. Kept explicit rather than
 //    // heuristic: misclassifying one of these could lock the user out of
@@ -80,8 +80,8 @@ class AppInventoryRepository(private val context: Context) {
 //        ApplicationInfo.CATEGORY_VIDEO
 //    )
 //
-//    fun getInstalledApps(): List<AppInfo> {
-//        val pm = context.packageManager
+//    open fun getInstalledApps(): List<AppInfo> {
+//        val pm = context!!.packageManager
 //        val intent = Intent(Intent.ACTION_MAIN, null).apply {
 //            addCategory(Intent.CATEGORY_LAUNCHER)
 //        }

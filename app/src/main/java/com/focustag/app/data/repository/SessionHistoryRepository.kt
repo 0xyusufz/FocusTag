@@ -20,7 +20,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-class SessionHistoryRepository(private val context: Context, private val userId: String) {
+open class SessionHistoryRepository(private val context: Context?, private val userId: String) {
 
     companion object {
         private const val TAG = "SessionHistoryRepo"
@@ -70,7 +70,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
     }
 
     private val prefs by lazy {
-        context.getSharedPreferences("$PREFS_NAME_PREFIX$userId", Context.MODE_PRIVATE)
+        context!!.getSharedPreferences("$PREFS_NAME_PREFIX$userId", Context.MODE_PRIVATE)
     }
 
     private val _sessions = getSessionFlow(userId)
@@ -100,7 +100,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session created in history: ${record.sessionId}")
         updateFlows()
-        SyncScheduler.scheduleSync(context, userId)
+        SyncScheduler.scheduleSync(context!!, userId)
     }
 
     suspend fun completeSession(sessionId: String, status: SessionStatus, endAt: Long) = writeMutex.withLock {
@@ -112,7 +112,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session completed in history: $sessionId with status $status")
         updateFlows()
-        SyncScheduler.scheduleSync(context, userId)
+        SyncScheduler.scheduleSync(context!!, userId)
     }
 
     suspend fun interruptSession(sessionId: String, endAt: Long) = writeMutex.withLock {
@@ -124,10 +124,10 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         Log.d(TAG, "Session interrupted in history: $sessionId")
         updateFlows()
-        SyncScheduler.scheduleSync(context, userId)
+        SyncScheduler.scheduleSync(context!!, userId)
     }
 
-    fun getSessions(): List<FocusSessionRecord> {
+    open fun getSessions(): List<FocusSessionRecord> {
         val json = prefs.getString(KEY_SESSIONS, null) ?: return emptyList()
         return try {
             Json.decodeFromString(json)
@@ -195,10 +195,10 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
         Log.d(TAG, "Event persisted: ${event.packageName} for session ${event.sessionId}")
         updateFlows()
-        SyncScheduler.scheduleSync(context, userId)
+        SyncScheduler.scheduleSync(context!!, userId)
     }
 
-    fun getEvents(): List<InterceptionEvent> {
+    open fun getEvents(): List<InterceptionEvent> {
         val json = prefs.getString(KEY_EVENTS, null) ?: return emptyList()
         return try {
             Json.decodeFromString(json)

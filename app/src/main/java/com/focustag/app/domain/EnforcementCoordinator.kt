@@ -20,7 +20,7 @@ import java.util.UUID
 
 private const val TAG = "EnforcementCoord"
 
-class EnforcementCoordinator(
+open class EnforcementCoordinator(
     private val userId: String,
     private val inventoryRepository: AppInventoryRepository,
     private val policyRepository: AppPolicyRepository,
@@ -34,13 +34,13 @@ class EnforcementCoordinator(
     }
 
     private val _status = MutableStateFlow(enforcementRepository.getStatus())
-    val status = _status.asStateFlow()
+    open val status = _status.asStateFlow()
 
     init {
         refreshStatus()
     }
 
-    fun refreshStatus(isAccessibilityReady: Boolean = true) {
+    open fun refreshStatus(isAccessibilityReady: Boolean = true) {
         val current = enforcementRepository.getStatus()
         val isDo = enforcementRepository.isDeviceOwner()
         
@@ -62,7 +62,7 @@ class EnforcementCoordinator(
         }
     }
 
-    suspend fun startEnforcement(tagId: String? = null) = globalMutex.withLock {
+    open suspend fun startEnforcement(tagId: String? = null) = globalMutex.withLock {
         Log.d(TAG, "Starting enforcement for $userId")
         
         // Check for device owner conflict
@@ -111,7 +111,7 @@ class EnforcementCoordinator(
         handleEnforcementResult(result)
     }
 
-    suspend fun stopEnforcement() = globalMutex.withLock {
+    open suspend fun stopEnforcement() = globalMutex.withLock {
         Log.d(TAG, "Stopping enforcement for $userId")
 
         // Check for device ownership
@@ -148,7 +148,7 @@ class EnforcementCoordinator(
         }
     }
 
-    suspend fun reconcile() {
+    open suspend fun reconcile() {
         Log.d(TAG, "Reconciling enforcement for $userId - entry")
         
         Log.d(TAG, "Reconciling enforcement for $userId - waiting for lock")
@@ -183,7 +183,7 @@ class EnforcementCoordinator(
      * Checks if there's an active enforcement snapshot but the focus state is NORMAL.
      * If so, marks the historical session as INTERRUPTED and cleans up.
      */
-    suspend fun checkAndHandleOrphans() = globalMutex.withLock {
+    open suspend fun checkAndHandleOrphans() = globalMutex.withLock {
         val snapshot = enforcementRepository.getSnapshot()
         val owner = enforcementRepository.getDeviceEnforcementOwnerId()
         
