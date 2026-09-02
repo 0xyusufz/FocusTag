@@ -10,11 +10,12 @@ import java.time.ZoneId
 
 class DashboardStatsCalculatorTest {
 
-    private val zoneId = ZoneId.of("UTC")
+    private val zoneId = ZoneId.of("Asia/Kolkata")
     
     @Test
     fun `calculate today duration - session entirely within today`() {
-        // Today is 2026-09-02
+        // Today is 2026-09-02 in IST
+        // 2026-09-02 10:00 IST is 2026-09-02 04:30 UTC
         val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
         
         val sessions = listOf(
@@ -37,24 +38,27 @@ class DashboardStatsCalculatorTest {
 
     @Test
     fun `calculate today duration - session crossing midnight (start yesterday)`() {
+        // Current time: 2026-09-02 12:00 UTC -> 17:30 IST
         val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
         
+        // IST Midnight: 2026-09-01 18:30 UTC
+        // Session starting at 18:25 UTC (Yesterday in IST) and ending at 18:35 UTC (Today in IST)
         val sessions = listOf(
             FocusSessionRecord(
                 sessionId = "1",
                 userId = "u1",
                 tagId = null,
-                startAt = Instant.parse("2026-09-01T23:50:00Z").toEpochMilli(),
-                endAt = Instant.parse("2026-09-02T00:10:00Z").toEpochMilli(),
+                startAt = Instant.parse("2026-09-01T18:25:00Z").toEpochMilli(),
+                endAt = Instant.parse("2026-09-01T18:35:00Z").toEpochMilli(),
                 status = SessionStatus.COMPLETED
             )
         )
         
         val state = DashboardStatsCalculator.calculate(sessions, emptyList(), now, zoneId)
         
-        // Contribution to today (Sept 2nd) should be 10 minutes = 600000 ms
-        assertEquals(600000L, state.todayDurationMillis)
-        // Session count is based on startAt, so SEPT 1st session doesn't count for TODAY (SEPT 2nd)
+        // Contribution to today (Sept 2nd IST) should be 5 minutes = 300000 ms
+        assertEquals(300000L, state.todayDurationMillis)
+        // Session count is based on startAt, so Sept 1st IST session doesn't count for TODAY (Sept 2nd)
         assertEquals(0, state.todaySessionCount)
     }
 
@@ -90,14 +94,14 @@ class DashboardStatsCalculatorTest {
                 sessionId = "s1",
                 userId = "u1",
                 packageName = "com.bad.app",
-                timestamp = Instant.parse("2026-09-02T10:30:00Z").toEpochMilli()
+                timestamp = Instant.parse("2026-09-02T10:30:00Z").toEpochMilli() // Today in IST
             ),
             com.focustag.app.data.model.InterceptionEvent(
                 eventId = "e2",
                 sessionId = "s1",
                 userId = "u1",
                 packageName = "com.bad.app",
-                timestamp = Instant.parse("2026-09-01T23:30:00Z").toEpochMilli() // Yesterday
+                timestamp = Instant.parse("2026-09-01T15:30:00Z").toEpochMilli() // Yesterday in IST (before 18:30 UTC)
             )
         )
         
@@ -139,5 +143,52 @@ class DashboardStatsCalculatorTest {
         // Yesterday (daysAgo = 1, so index 5)
         assertEquals("Tue", state.weeklyStats[5].dayName)
         assertEquals(3600000L, state.weeklyStats[5].durationMillis)
+    }
+
+    @Test
+    fun `calculate location aggregation`() {
+        val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
+        val libTag = "1D:FF:7C:1C:1A:10:80"
+        
+        val sessions = listOf(
+            FocusSessionRecord("s1", "u1", libTag, now - 3600000, now - 1800000, SessionStatus.COMPLETED),
+            FocusSessionRecord("s2", "u1", libTag, now - 1200000, now, SessionStatus.COMPLETED)
+        )
+        
+        val state = DashboardStatsCalculator.calculate(sessions, emptyList(), now, zoneId)
+        
+        assertEquals(1, state.todayLocationCount)
+        assertEquals("Library 1", state.todayLocations[0].displayName)
+        assertEquals(3000000L, state.todayLocations[0].durationMillis) // 30m + 20m = 50m = 3,000,000ms
+        assertEquals(2, state.todayLocations[0].sessionCount)
+    }
+
+    @Test
+    fun `calculate top distraction`() {
+        val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
+        val events = listOf(
+            com.focustag.app.data.model.InterceptionEvent("e1", "s1", "u1", "com.insta", now - 1000),
+            com.focustag.app.data.model.InterceptionEvent("e2", "s1", "u1", "com.insta", now - 2000),
+            com.focustag.app.data.model.InterceptionEvent("e3", "s1", "u1", "com.fb", now - 3000)
+        )
+        
+        val state = DashboardStatsCalculator.calculate(emptyList(), events, now, zoneId)
+        
+        assertEquals("com.insta", state.topDistraction?.packageName)
+        assertEquals("Insta", state.topDistraction?.appName)
+        assertEquals(2, state.topDistraction?.blockedCount)
+    }
+
+    @Test
+    fun `empty dataset handling`() {
+        val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
+        val state = DashboardStatsCalculator.calculate(emptyList(), emptyList(), now, zoneId)
+        
+        assertEquals(0, state.todayDurationMillis)
+        assertEquals(0, state.todaySessionCount)
+        assertEquals(0, state.todayLocations.size)
+        assertEquals(null, state.topDistraction)
+        assertEquals(7, state.weeklyStats.size)
+        assertEquals(7, state.dailySummaries.size)
     }
 }
