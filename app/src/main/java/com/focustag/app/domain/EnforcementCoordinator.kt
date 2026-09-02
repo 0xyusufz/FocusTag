@@ -190,7 +190,7 @@ class EnforcementCoordinator(
         if (snapshot != null && owner == userId) {
             Log.i(TAG, "Orphaned session detected for $userId. Cleaning up.")
             try {
-                sessionHistoryRepository.interruptSession(snapshot.sessionId)
+                sessionHistoryRepository.interruptSession(snapshot.sessionId, System.currentTimeMillis())
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to mark orphan session in history: ${e.message}")
             }

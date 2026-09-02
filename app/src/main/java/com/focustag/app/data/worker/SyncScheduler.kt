@@ -33,7 +33,7 @@ object SyncScheduler {
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             "sync_$userId",
-            ExistingWorkPolicy.REPLACE, // REPLACE to ensure latest state is synced
+            ExistingWorkPolicy.KEEP, // KEEP to prevent worker churn and refresh storms
             syncRequest
         )
     }

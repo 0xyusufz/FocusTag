@@ -17,7 +17,8 @@ data class FocusSessionRecord(
     val startAt: Long,
     val endAt: Long? = null,
     val status: SessionStatus,
-    val syncDirty: Boolean = true
+    val syncDirty: Boolean = true,
+    val syncFailedPermanently: Boolean = false
 )
 
 @Serializable
@@ -27,5 +28,6 @@ data class InterceptionEvent(
     val userId: String,
     val packageName: String,
     val timestamp: Long,
-    val syncDirty: Boolean = true
+    val syncDirty: Boolean = true,
+    val syncFailedPermanently: Boolean = false
 )

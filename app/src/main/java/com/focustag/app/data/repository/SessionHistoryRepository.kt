@@ -93,7 +93,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         // Prevent duplicates
         if (sessions.any { it.sessionId == record.sessionId }) return@withLock
         
-        sessions.add(0, record)
+        sessions.add(0, record.copy(syncFailedPermanently = false))
         if (sessions.size > MAX_SESSIONS) {
             sessions.removeAt(sessions.size - 1)
         }
@@ -106,7 +106,7 @@ class SessionHistoryRepository(private val context: Context, private val userId:
     suspend fun completeSession(sessionId: String, status: SessionStatus, endAt: Long) = writeMutex.withLock {
         val sessions = getSessions().map {
             if (it.sessionId == sessionId) {
-                it.copy(status = status, endAt = endAt, syncDirty = true)
+                it.copy(status = status, endAt = endAt, syncDirty = true, syncFailedPermanently = false)
             } else it
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
@@ -115,10 +115,10 @@ class SessionHistoryRepository(private val context: Context, private val userId:
         SyncScheduler.scheduleSync(context, userId)
     }
 
-    suspend fun interruptSession(sessionId: String) = writeMutex.withLock {
+    suspend fun interruptSession(sessionId: String, endAt: Long) = writeMutex.withLock {
         val sessions = getSessions().map {
             if (it.sessionId == sessionId && it.status == SessionStatus.IN_PROGRESS) {
-                it.copy(status = SessionStatus.INTERRUPTED, syncDirty = true)
+                it.copy(status = SessionStatus.INTERRUPTED, endAt = endAt, syncDirty = true, syncFailedPermanently = false)
             } else it
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
@@ -137,14 +137,33 @@ class SessionHistoryRepository(private val context: Context, private val userId:
     }
 
     fun getDirtySessions(): List<FocusSessionRecord> {
-        return getSessions().filter { it.syncDirty }
+        return getSessions().filter { it.syncDirty && !it.syncFailedPermanently }
     }
 
-    suspend fun markSessionSynced(sessionId: String) = writeMutex.withLock {
-        val sessions = getSessions().map {
-            if (it.sessionId == sessionId) {
-                it.copy(syncDirty = false)
-            } else it
+    suspend fun markSessionSynced(record: FocusSessionRecord) = writeMutex.withLock {
+        val sessions = getSessions().map { local ->
+            if (local.sessionId == record.sessionId) {
+                // Only clear dirty if the local data exactly matches what we just synced
+                // (ignoring dirty flags)
+                if (local.copy(syncDirty = true, syncFailedPermanently = false) == 
+                    record.copy(syncDirty = true, syncFailedPermanently = false)) {
+                    local.copy(syncDirty = false, syncFailedPermanently = false)
+                } else local
+            } else local
+        }
+        prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
+        updateFlows()
+    }
+
+    suspend fun markSessionFailedPermanently(record: FocusSessionRecord) = writeMutex.withLock {
+        val sessions = getSessions().map { local ->
+            if (local.sessionId == record.sessionId) {
+                // Value-aware: only mark failed if local is still the version that failed
+                if (local.copy(syncDirty = true, syncFailedPermanently = false) == 
+                    record.copy(syncDirty = true, syncFailedPermanently = false)) {
+                    local.copy(syncDirty = true, syncFailedPermanently = true)
+                } else local
+            } else local
         }
         prefs.edit().putString(KEY_SESSIONS, Json.encodeToString(sessions)).apply()
         updateFlows()
@@ -157,7 +176,8 @@ class SessionHistoryRepository(private val context: Context, private val userId:
             userId = userId,
             packageName = packageName,
             timestamp = System.currentTimeMillis(),
-            syncDirty = true
+            syncDirty = true,
+            syncFailedPermanently = false
         )
         val success = interceptionEvents.tryEmit(event)
         if (!success) {
@@ -188,14 +208,30 @@ class SessionHistoryRepository(private val context: Context, private val userId:
     }
 
     fun getDirtyEvents(): List<InterceptionEvent> {
-        return getEvents().filter { it.syncDirty }
+        return getEvents().filter { it.syncDirty && !it.syncFailedPermanently }
     }
 
-    suspend fun markEventSynced(eventId: String) = writeMutex.withLock {
-        val events = getEvents().map {
-            if (it.eventId == eventId) {
-                it.copy(syncDirty = false)
-            } else it
+    suspend fun markEventSynced(event: InterceptionEvent) = writeMutex.withLock {
+        val events = getEvents().map { local ->
+            if (local.eventId == event.eventId) {
+                if (local.copy(syncDirty = true, syncFailedPermanently = false) == 
+                    event.copy(syncDirty = true, syncFailedPermanently = false)) {
+                    local.copy(syncDirty = false, syncFailedPermanently = false)
+                } else local
+            } else local
+        }
+        prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
+        updateFlows()
+    }
+
+    suspend fun markEventFailedPermanently(event: InterceptionEvent) = writeMutex.withLock {
+        val events = getEvents().map { local ->
+            if (local.eventId == event.eventId) {
+                if (local.copy(syncDirty = true, syncFailedPermanently = false) == 
+                    event.copy(syncDirty = true, syncFailedPermanently = false)) {
+                    local.copy(syncDirty = true, syncFailedPermanently = true)
+                } else local
+            } else local
         }
         prefs.edit().putString(KEY_EVENTS, Json.encodeToString(events)).apply()
         updateFlows()

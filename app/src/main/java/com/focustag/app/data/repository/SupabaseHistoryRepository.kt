@@ -28,6 +28,12 @@ data class InterceptionEventDto(
     @SerialName("created_at") val createdAt: String
 )
 
+sealed class SyncError : Exception() {
+    data class Permanent(val code: String?, override val message: String?) : SyncError()
+    data class Retryable(override val message: String?) : SyncError()
+    data object Conflict : SyncError() // Specifically for 409
+}
+
 class SupabaseHistoryRepository {
 
     private fun toIsoString(millis: Long): String {
@@ -36,6 +42,25 @@ class SupabaseHistoryRepository {
 
     private fun fromIsoString(iso: String): Long {
         return Instant.parse(iso).toEpochMilli()
+    }
+
+    private fun classifyError(e: Exception): SyncError {
+        if (e is io.github.jan.supabase.exceptions.RestException) {
+            val status = e.response.status.value
+            return when (status) {
+                409 -> SyncError.Conflict
+                401 -> SyncError.Retryable("Unauthorized - needs refresh")
+                400, 403, 422 -> SyncError.Permanent(status.toString(), e.message)
+                429 -> SyncError.Retryable("Rate limited: ${e.message}")
+                in 500..599 -> SyncError.Retryable("Server error: ${e.message}")
+                else -> SyncError.Permanent(status.toString(), e.message)
+            }
+        }
+        val msg = e.message?.lowercase() ?: ""
+        if (msg.contains("timeout") || msg.contains("network") || msg.contains("connectivity")) {
+            return SyncError.Retryable(e.message)
+        }
+        return SyncError.Permanent("unknown", e.message)
     }
 
     suspend fun fetchSessions(userId: String): Result<List<FocusSessionRecord>> {
@@ -78,19 +103,24 @@ class SupabaseHistoryRepository {
             }
             Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(classifyError(e))
         }
     }
 
-    suspend fun upsertEvent(event: InterceptionEvent): Result<Unit> {
+    suspend fun insertEvent(event: InterceptionEvent): Result<Unit> {
         return try {
             val dto = InterceptionEventMapper.toDto(event, ::toIsoString)
-            SupabaseModule.client.postgrest["interception_events"].upsert(dto) {
-                onConflict = "id"
-            }
+            // Use insert() instead of upsert() for S3 append-only compliance
+            SupabaseModule.client.postgrest["interception_events"].insert(dto)
             Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(e)
+            val classified = classifyError(e)
+            if (classified is SyncError.Conflict) {
+                // 409 Conflict means it's already there (idempotent success)
+                Result.success(Unit)
+            } else {
+                Result.failure(classified)
+            }
         }
     }
 }

@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SupabaseModule.initialize(applicationContext)
         nfcController = NfcController(this)
         SessionHistoryRepository.initCollector(applicationContext)
         SupabaseModule.client.handleDeeplinks(intent)
