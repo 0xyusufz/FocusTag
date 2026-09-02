@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                     
                     val sessionStatus by authViewModel.sessionStatus.collectAsState()
                     val uiState by authViewModel.uiState.collectAsState()
-                    var currentScreen by remember { mutableStateOf("home") }
+                    var currentScreen by remember { mutableStateOf("dashboard") }
 
                     val appSelectionViewModel: AppSelectionViewModel? = if (sessionStatus is SessionStatus.Authenticated) {
                         val userId = (sessionStatus as SessionStatus.Authenticated).session.user?.id ?: ""
@@ -139,6 +139,21 @@ class MainActivity : ComponentActivity() {
                                         userId = userId,
                                         localRepo = SessionHistoryRepository(this@MainActivity, userId),
                                         remoteRepo = SupabaseHistoryRepository()
+                                    ) as T
+                                }
+                            }
+                        )
+                    } else null
+
+                    val dashboardViewModel: com.focustag.app.ui.dashboard.DashboardViewModel? = if (sessionStatus is SessionStatus.Authenticated) {
+                        val userId = (sessionStatus as SessionStatus.Authenticated).session.user?.id ?: ""
+                        viewModel(
+                            key = "dashboard_$userId",
+                            factory = object : ViewModelProvider.Factory {
+                                @Suppress("UNCHECKED_CAST")
+                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                    return com.focustag.app.ui.dashboard.DashboardViewModel(
+                                        localRepo = SessionHistoryRepository(this@MainActivity, userId)
                                     ) as T
                                 }
                             }
@@ -191,10 +206,20 @@ class MainActivity : ComponentActivity() {
                         when (sessionStatus) {
                             is SessionStatus.Authenticated -> {
                                 when (currentScreen) {
+                                    "dashboard" -> {
+                                        dashboardViewModel?.let {
+                                            com.focustag.app.ui.dashboard.DashboardScreen(
+                                                viewModel = it,
+                                                onNavigateToHistory = { currentScreen = "history" },
+                                                onNavigateToFocus = { currentScreen = "home" },
+                                                onNavigateToProfile = { currentScreen = "profile" }
+                                            )
+                                        }
+                                    }
                                     "profile" -> ProfileScreen(
                                         viewModel = profileViewModel,
                                         isFocusActive = isFocusActive,
-                                        onBack = { currentScreen = "home" }
+                                        onBack = { currentScreen = "dashboard" }
                                     )
                                     "apps" -> {
                                         appSelectionViewModel?.let {
@@ -209,7 +234,7 @@ class MainActivity : ComponentActivity() {
                                         historyViewModel?.let {
                                             HistoryScreen(
                                                 viewModel = it,
-                                                onBack = { currentScreen = "home" }
+                                                onBack = { currentScreen = "dashboard" }
                                             )
                                         }
                                     }
@@ -220,7 +245,8 @@ class MainActivity : ComponentActivity() {
                                                 focusViewModel = focusVM,
                                                 onNavigateToProfile = { currentScreen = "profile" },
                                                 onNavigateToApps = { currentScreen = "apps" },
-                                                onNavigateToHistory = { currentScreen = "history" }
+                                                onNavigateToHistory = { currentScreen = "history" },
+                                                onBack = { currentScreen = "dashboard" }
                                             )
                                         }
                                     }

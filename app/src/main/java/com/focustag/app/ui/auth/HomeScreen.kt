@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,7 +42,8 @@ fun HomeScreen(
     focusViewModel: FocusViewModel,
     onNavigateToProfile: () -> Unit,
     onNavigateToApps: () -> Unit,
-    onNavigateToHistory: () -> Unit
+    onNavigateToHistory: () -> Unit,
+    onBack: () -> Unit
 ) {
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val focusSessionState by focusViewModel.focusState.collectAsState()
@@ -64,7 +66,16 @@ fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
-        Spacer(modifier = Modifier.height(48.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            OutlinedButton(onClick = onBack) {
+                Text("← Dashboard")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         
         // Logo Placeholder (Simple Box instead of Icon to avoid extra dependencies)
         Box(
