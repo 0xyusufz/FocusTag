@@ -1,5 +1,5 @@
 -- Phase 9 Step 2A: Database Schema Implementation
-
+--supabase/migrations/20260904000000_phase9_schema.sql
 -- 1. Create institutions table
 CREATE TABLE IF NOT EXISTS public.institutions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
