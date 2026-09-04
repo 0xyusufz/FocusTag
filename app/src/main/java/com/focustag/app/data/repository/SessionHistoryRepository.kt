@@ -137,7 +137,9 @@ open class SessionHistoryRepository(private val context: Context?, private val u
     }
 
     fun getDirtySessions(): List<FocusSessionRecord> {
-        return getSessions().filter { it.syncDirty && !it.syncFailedPermanently }
+        // Inclusion of syncFailedPermanently allows records previously killed by the classification bug 
+        // to be re-evaluated by the improved classifier.
+        return getSessions().filter { it.syncDirty }
     }
 
     suspend fun markSessionSynced(record: FocusSessionRecord) = writeMutex.withLock {
@@ -208,7 +210,7 @@ open class SessionHistoryRepository(private val context: Context?, private val u
     }
 
     fun getDirtyEvents(): List<InterceptionEvent> {
-        return getEvents().filter { it.syncDirty && !it.syncFailedPermanently }
+        return getEvents().filter { it.syncDirty }
     }
 
     suspend fun markEventSynced(event: InterceptionEvent) = writeMutex.withLock {

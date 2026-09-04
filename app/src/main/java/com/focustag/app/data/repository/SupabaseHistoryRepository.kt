@@ -53,14 +53,11 @@ class SupabaseHistoryRepository {
                 400, 403, 422 -> SyncError.Permanent(status.toString(), e.message)
                 429 -> SyncError.Retryable("Rate limited: ${e.message}")
                 in 500..599 -> SyncError.Retryable("Server error: ${e.message}")
-                else -> SyncError.Permanent(status.toString(), e.message)
+                else -> SyncError.Retryable("Rest error: $status - ${e.message}")
             }
         }
-        val msg = e.message?.lowercase() ?: ""
-        if (msg.contains("timeout") || msg.contains("network") || msg.contains("connectivity")) {
-            return SyncError.Retryable(e.message)
-        }
-        return SyncError.Permanent("unknown", e.message)
+        // Default to Retryable for all IO/Network/Unknown exceptions to prevent data loss
+        return SyncError.Retryable(e.message)
     }
 
     suspend fun fetchSessions(userId: String): Result<List<FocusSessionRecord>> {
