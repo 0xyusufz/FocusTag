@@ -7,10 +7,10 @@ import kotlinx.serialization.Serializable
 data class Profile(
     @SerialName("id")
     val id: String,
-   @SerialName("name")
-val name: String? = null,
-@SerialName("role")
-val role: String = "student",
-@SerialName("institution_id")
-val institutionId: String? = null
+    @SerialName("name")
+    val name: String? = null,
+    @SerialName("role")
+    val role: String = "student",
+    @SerialName("institution_id")
+    val institutionId: String? = null
 )
