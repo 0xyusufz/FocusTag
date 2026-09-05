@@ -8,22 +8,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.focustag.app.data.model.RosterStudent
 import com.focustag.app.data.model.StudentFocusStatus
+
+enum class RosterFilter {
+    ALL, ACTIVE, NOT_ACTIVE
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,8 +37,19 @@ fun ClassRosterScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedClass = uiState.selectedClass
     
+    var currentFilter by remember { mutableStateOf(RosterFilter.ALL) }
+    
     val activeCount = remember(uiState.roster) { uiState.roster.count { it.status == StudentFocusStatus.ACTIVE } }
     val totalCount = uiState.roster.size
+
+    val filteredStudents = remember(uiState.roster, currentFilter) {
+        val baseList = uiState.roster.sortedBy { it.status != StudentFocusStatus.ACTIVE }
+        when (currentFilter) {
+            RosterFilter.ALL -> baseList
+            RosterFilter.ACTIVE -> baseList.filter { it.status == StudentFocusStatus.ACTIVE }
+            RosterFilter.NOT_ACTIVE -> baseList.filter { it.status != StudentFocusStatus.ACTIVE }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -128,7 +142,12 @@ fun ClassRosterScreen(
                         ActiveSummaryCard(activeCount = activeCount, totalCount = totalCount)
                     }
 
-                    val groupedStudents = uiState.roster.sortedBy { it.status != StudentFocusStatus.ACTIVE }
+                    item {
+                        RosterFilterRow(
+                            currentFilter = currentFilter,
+                            onFilterChange = { currentFilter = it }
+                        )
+                    }
                     
                     item {
                         Text(
@@ -140,8 +159,14 @@ fun ClassRosterScreen(
                         )
                     }
 
-                    items(groupedStudents) { student ->
-                        StudentRosterCard(student)
+                    if (filteredStudents.isEmpty()) {
+                        item {
+                            EmptyFilterState(currentFilter)
+                        }
+                    } else {
+                        items(filteredStudents) { student ->
+                            StudentRosterCard(student)
+                        }
                     }
 
                     item {
@@ -156,6 +181,56 @@ fun ClassRosterScreen(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RosterFilterRow(
+    currentFilter: RosterFilter,
+    onFilterChange: (RosterFilter) -> Unit
+) {
+    val options = listOf(
+        RosterFilter.ALL to "ALL",
+        RosterFilter.ACTIVE to "ACTIVE",
+        RosterFilter.NOT_ACTIVE to "OFF"
+    )
+
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        options.forEachIndexed { index, (filter, label) ->
+            SegmentedButton(
+                selected = currentFilter == filter,
+                onClick = { onFilterChange(filter) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                icon = {}
+            ) {
+                Text(text = label, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyFilterState(filter: RosterFilter) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    ) {
+        val text = when (filter) {
+            RosterFilter.ALL -> "No students enrolled yet."
+            RosterFilter.ACTIVE -> "No students currently active."
+            RosterFilter.NOT_ACTIVE -> "All students are currently active."
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(24.dp),
+            textAlign = TextAlign.Center
+        )
     }
 }
 
