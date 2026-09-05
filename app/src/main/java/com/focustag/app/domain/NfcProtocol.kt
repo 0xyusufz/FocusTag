@@ -6,7 +6,9 @@ object NfcProtocol {
     private val physicalRegistry = mapOf(
         "1D:FF:7C:1C:1A:10:80" to "Library 1",
         "1D:5B:70:1C:1A:10:80" to "Classroom 1",
-        "1D:3D:70:1C:1A:10:80" to "Classroom 2"
+        "1D:3D:70:1C:1A:10:80" to "Classroom 2",
+        "1D:C5:7C:1C:1A:10:80" to "Classroom 3",
+        "1D:39:77:1C:1A:10:80" to "Classroom 4"
     )
 
     /**

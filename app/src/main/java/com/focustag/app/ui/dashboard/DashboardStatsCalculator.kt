@@ -135,6 +135,8 @@ object DashboardStatsCalculator {
             "1D:FF:7C:1C:1A:10:80" -> "Library 1"
             "1D:5B:70:1C:1A:10:80" -> "Classroom 1"
             "1D:3D:70:1C:1A:10:80" -> "Classroom 2"
+            "1D:C5:7C:1C:1A:10:80" -> "Classroom 3"
+            "1D:39:77:1C:1A:10:80" -> "Classroom 4"
             "simulated_tag_01" -> "Simulated Tag"
             "unknown" -> "Unknown Location"
             else -> tagId
