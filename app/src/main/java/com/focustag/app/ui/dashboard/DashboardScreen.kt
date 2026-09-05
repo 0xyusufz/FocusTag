@@ -60,9 +60,11 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
+    isTeacher: Boolean = false,
     onNavigateToHistory: () -> Unit,
     onNavigateToFocus: () -> Unit,
-    onNavigateToProfile: () -> Unit
+    onNavigateToProfile: () -> Unit,
+    onNavigateToTeacher: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -74,7 +76,11 @@ fun DashboardScreen(
     ) {
         item {
             Spacer(modifier = Modifier.height(8.dp))
-            DashboardHeader(onProfileClick = onNavigateToProfile)
+            DashboardHeader(
+                onProfileClick = onNavigateToProfile,
+                isTeacher = isTeacher,
+                onTeacherClick = onNavigateToTeacher
+            )
         }
 
         item {
@@ -425,13 +431,17 @@ fun DailySummaryCard(summary: DailySummary, isDefaultExpanded: Boolean) {
 }
 
 @Composable
-fun DashboardHeader(onProfileClick: () -> Unit) {
+fun DashboardHeader(
+    onProfileClick: () -> Unit,
+    isTeacher: Boolean = false,
+    onTeacherClick: () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Dashboard",
                 style = MaterialTheme.typography.headlineMedium,
@@ -445,11 +455,23 @@ fun DashboardHeader(onProfileClick: () -> Unit) {
             )
         }
         
-        OutlinedButton(
-            onClick = onProfileClick,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Profile")
+        Row {
+            if (isTeacher) {
+                OutlinedButton(
+                    onClick = onTeacherClick,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text("My Classes")
+                }
+            }
+            
+            OutlinedButton(
+                onClick = onProfileClick,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Profile")
+            }
         }
     }
 }

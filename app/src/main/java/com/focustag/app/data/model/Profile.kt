@@ -10,5 +10,7 @@ data class Profile(
     @SerialName("name")
     val name: String? = null,
     @SerialName("role")
-    val role: String = "student"
+    val role: String = "student",
+    @SerialName("institution_id")
+    val institutionId: String? = null
 )

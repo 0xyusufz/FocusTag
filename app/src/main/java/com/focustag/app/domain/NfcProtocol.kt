@@ -12,7 +12,7 @@ object NfcProtocol {
     /**
      * Normalizes a tag UID to the canonical uppercase colon-separated format.
      * Example: 1dff7c1c1a1080 -> 1D:FF:7C:1C:1A:10:80
-     * 
+     *
      * Handles simulated_tag_01 as a special case by returning it as-is.
      * Returns null for malformed or empty input.
      */

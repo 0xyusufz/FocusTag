@@ -35,6 +35,7 @@ import com.focustag.app.data.repository.EnforcementRepository
 import com.focustag.app.data.repository.FocusRepository
 import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.data.repository.SupabaseHistoryRepository
+import com.focustag.app.data.repository.SupabaseTeacherRepository
 import com.focustag.app.data.supabase.SupabaseModule
 import com.focustag.app.data.worker.SyncScheduler
 import com.focustag.app.domain.AccessibilityEnforcementStrategy
@@ -51,6 +52,9 @@ import com.focustag.app.ui.history.HistoryScreen
 import com.focustag.app.ui.history.HistoryViewModel
 import com.focustag.app.ui.profile.ProfileScreen
 import com.focustag.app.ui.profile.ProfileViewModel
+import com.focustag.app.ui.teacher.ClassRosterScreen
+import com.focustag.app.ui.teacher.TeacherClassesScreen
+import com.focustag.app.ui.teacher.TeacherViewModel
 import com.focustag.app.ui.theme.FocusTagTheme
 import com.focustag.app.util.NfcController
 import io.github.jan.supabase.auth.handleDeeplinks
@@ -160,6 +164,19 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else null
+
+                    val teacherViewModel: TeacherViewModel? = if (sessionStatus is SessionStatus.Authenticated) {
+                        val userId = (sessionStatus as SessionStatus.Authenticated).session.user?.id ?: ""
+                        viewModel(
+                            key = "teacher_$userId",
+                            factory = object : ViewModelProvider.Factory {
+                                @Suppress("UNCHECKED_CAST")
+                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                    return TeacherViewModel(SupabaseTeacherRepository()) as T
+                                }
+                            }
+                        )
+                    } else null
                     
                     activeFocusViewModel = focusViewModel
 
@@ -211,12 +228,38 @@ class MainActivity : ComponentActivity() {
                             is SessionStatus.Authenticated -> {
                                 when (currentScreen) {
                                     "dashboard" -> {
+                                        val profileState by profileViewModel.uiState.collectAsState()
                                         dashboardViewModel?.let {
                                             com.focustag.app.ui.dashboard.DashboardScreen(
                                                 viewModel = it,
+                                                isTeacher = profileState.role == "teacher",
                                                 onNavigateToHistory = { currentScreen = "history" },
                                                 onNavigateToFocus = { currentScreen = "home" },
-                                                onNavigateToProfile = { currentScreen = "profile" }
+                                                onNavigateToProfile = { currentScreen = "profile" },
+                                                onNavigateToTeacher = { currentScreen = "teacher_classes" }
+                                            )
+                                        }
+                                    }
+                                    "teacher_classes" -> {
+                                        teacherViewModel?.let {
+                                            TeacherClassesScreen(
+                                                viewModel = it,
+                                                onClassClick = { cls ->
+                                                    it.selectClass(cls)
+                                                    currentScreen = "teacher_roster"
+                                                },
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+                                    }
+                                    "teacher_roster" -> {
+                                        teacherViewModel?.let {
+                                            ClassRosterScreen(
+                                                viewModel = it,
+                                                onBack = { 
+                                                    it.clearSelection()
+                                                    currentScreen = "teacher_classes" 
+                                                }
                                             )
                                         }
                                     }
