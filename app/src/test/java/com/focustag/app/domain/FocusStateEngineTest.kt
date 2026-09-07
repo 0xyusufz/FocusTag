@@ -6,13 +6,21 @@ import com.focustag.app.data.model.FocusTransition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class FocusStateEngineTest {
 
     private val libTag = "1D:FF:7C:1C:1A:10:80"
     private val class1Tag = "1D:5B:70:1C:1A:10:80"
+    private val class3Tag = "1D:C5:7C:1C:1A:10:80"
     private val unknownTag = "AA:BB:CC:DD:EE:FF:00"
+
+    @Before
+    fun setup() {
+        // Initialize dynamic registry for testing
+        NfcProtocol.setRegisteredTags(setOf(libTag, class1Tag, "1D:3D:70:1C:1A:10:80"))
+    }
 
     // --- A. Registry Tests ---
 
@@ -26,13 +34,28 @@ class FocusStateEngineTest {
     @Test
     fun `registry rejects unknown tags`() {
         assertTrue(!NfcProtocol.isRegistered(unknownTag))
-        assertTrue(!NfcProtocol.isRegistered("simulated_tag_01"))
     }
 
     @Test
-    fun `registry maps tags to correct locations`() {
-        assertEquals("Library 1", NfcProtocol.getLocation(libTag))
-        assertEquals("Classroom 1", NfcProtocol.getLocation(class1Tag))
+    fun `simulated tag is always registered`() {
+        assertTrue(NfcProtocol.isRegistered("simulated_tag_01"))
+    }
+
+    @Test
+    fun `registry recognizes newly added tags after update`() {
+        assertTrue(!NfcProtocol.isRegistered(class3Tag))
+        
+        NfcProtocol.setRegisteredTags(setOf(libTag, class1Tag, class3Tag))
+        assertTrue(NfcProtocol.isRegistered(class3Tag))
+    }
+
+    @Test
+    fun `registry rejects deactivated tags after update`() {
+        NfcProtocol.setRegisteredTags(setOf(libTag, class1Tag))
+        assertTrue(NfcProtocol.isRegistered(libTag))
+        
+        NfcProtocol.setRegisteredTags(setOf(class1Tag)) // libTag deactivated
+        assertTrue(!NfcProtocol.isRegistered(libTag))
     }
 
     // --- B. Normalization Tests ---

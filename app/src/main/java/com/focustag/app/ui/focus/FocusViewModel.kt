@@ -4,16 +4,16 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.focustag.app.data.model.AccessibilityCapability
-import com.focustag.app.data.model.EnforcementStatus
-import com.focustag.app.data.model.FocusSessionState
-import com.focustag.app.data.model.FocusState
-import com.focustag.app.data.model.FocusTransition
-import com.focustag.app.data.model.NfcCapability
+import com.focustag.app.data.model.*
 import com.focustag.app.data.repository.FocusRepository
+import com.focustag.app.data.repository.NfcRepository
+import com.focustag.app.data.repository.NfcRegistryCache
 import com.focustag.app.data.repository.SessionHistoryRepository
+import com.focustag.app.data.supabase.SupabaseModule
+import io.github.jan.supabase.auth.auth
 import com.focustag.app.domain.EnforcementCoordinator
 import com.focustag.app.domain.FocusStateEngine
+import com.focustag.app.domain.NfcProtocol
 import com.focustag.app.util.AccessibilityCapabilityChecker
 import com.focustag.app.util.NfcCapabilityChecker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,8 +24,17 @@ import kotlinx.coroutines.launch
 open class FocusViewModel(
     private val context: Context?,
     private val focusRepository: FocusRepository,
-    private val enforcementCoordinator: EnforcementCoordinator
+    private val enforcementCoordinator: EnforcementCoordinator,
+    private val nfcRepository: NfcRepository? = null,
+    private val currentUserIdProvider: () -> String? = {
+        try { SupabaseModule.client.auth.currentSessionOrNull()?.user?.id } catch (e: Exception) { null }
+    }
 ) : ViewModel() {
+
+    private companion object {
+        const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
+        const val MAX_CACHE_AGE_MS = 48 * 60 * 60 * 1000L // 48 hours
+    }
 
     protected val _focusState = MutableStateFlow(focusRepository.getFocusSessionState())
     val focusState = _focusState.asStateFlow()
@@ -41,10 +50,16 @@ open class FocusViewModel(
 
     val enforcementStatus = enforcementCoordinator.status
 
+    private var lastRefreshTime = 0L
+    private var isRefreshing = false
+
     init {
         refreshAccessibilityCapability()
         refreshNfcCapability()
         
+        loadInitialRegistry()
+        refreshRegistry()
+
         // Initial reconciliation if app was killed while ACTIVE
         viewModelScope.launch {
             if (_focusState.value.focusState == FocusState.FOCUS_ACTIVE) {
@@ -97,6 +112,103 @@ open class FocusViewModel(
     open fun refreshEnforcementStatus() {
         val isReady = _accessibilityCapability.value == AccessibilityCapability.ACCESSIBILITY_READY
         enforcementCoordinator.refreshStatus(isReady)
+    }
+
+    private fun loadInitialRegistry() {
+        val nfcRepo = nfcRepository
+        if (nfcRepo == null) {
+            NfcProtocol.setRegisteredTags(emptySet())
+            return
+        }
+        
+        // H1 FIX: We need current user's institution to verify cache identity before applying.
+        val currentUserId = currentUserIdProvider()
+        if (currentUserId == null) {
+            Log.d("FocusViewModel", "No authenticated user. Physical NFC disabled.")
+            NfcProtocol.setRegisteredTags(emptySet())
+            return
+        }
+
+        val cache = nfcRepo.getCache()
+        if (cache == null) {
+            NfcProtocol.setRegisteredTags(emptySet())
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        
+        val verifiedProfilePrefs = context?.getSharedPreferences("verified_profile_$currentUserId", Context.MODE_PRIVATE)
+        val verifiedInstitutionId = verifiedProfilePrefs?.getString("institution_id", null)
+
+        // Only apply cache if the institution has been previously verified for this user
+        if (verifiedInstitutionId == null || verifiedInstitutionId != cache.fetchedForInstitutionId) {
+            Log.d("FocusViewModel", "Initial registry: institution mismatch or not yet verified locally.")
+            NfcProtocol.setRegisteredTags(emptySet())
+            return
+        }
+
+        // Age check: cache must be within 48-hour window
+        if (now - cache.fetchedAtMillis > MAX_CACHE_AGE_MS) {
+            Log.d("FocusViewModel", "Initial registry: cache expired.")
+            NfcProtocol.setRegisteredTags(emptySet())
+            return
+        }
+
+        Log.d("FocusViewModel", "Initial registry: Loaded ${cache.activeUids.size} tags for institution $verifiedInstitutionId")
+        NfcProtocol.setRegisteredTags(cache.activeUids)
+        lastRefreshTime = cache.fetchedAtMillis
+    }
+
+    fun refreshRegistry() {
+        if (isRefreshing || nfcRepository == null) return
+        val now = System.currentTimeMillis()
+        if (now - lastRefreshTime < REFRESH_INTERVAL_MS && lastRefreshTime != 0L) return
+
+        viewModelScope.launch {
+            isRefreshing = true
+            try {
+                nfcRepository.fetchProfile().onSuccess { profile ->
+                    val institutionId = profile?.institutionId
+                    
+                    // Update local verified profile cache to allow safe offline loading on next launch
+                    val currentUserId = currentUserIdProvider()
+                    if (currentUserId != null) {
+                        val prefs = context?.getSharedPreferences("verified_profile_$currentUserId", Context.MODE_PRIVATE)
+                        if (institutionId != null) {
+                            prefs?.edit()?.putString("institution_id", institutionId)?.apply()
+                        } else {
+                            prefs?.edit()?.remove("institution_id")?.apply()
+                        }
+                    }
+
+                    if (institutionId == null) {
+                        Log.d("FocusViewModel", "No institution assigned. Clearing physical registry.")
+                        NfcProtocol.setRegisteredTags(emptySet())
+                    } else {
+                        // Check if current cache is for a different institution
+                        val cache = nfcRepository.getCache()
+                        if (cache != null && cache.fetchedForInstitutionId != institutionId) {
+                            Log.d("FocusViewModel", "Institution changed. Discarding old cache.")
+                            NfcProtocol.setRegisteredTags(emptySet())
+                            // Overwrite with cleared cache to prevent resurrection
+                            nfcRepository.saveCache(NfcRegistryCache(emptySet(), institutionId, 0))
+                        }
+
+                        nfcRepository.fetchActiveTags().onSuccess { uids ->
+                            val normalizedUids = uids.mapNotNull { NfcProtocol.normalize(it) }.toSet()
+                            NfcProtocol.setRegisteredTags(normalizedUids)
+                            nfcRepository.saveCache(NfcRegistryCache(normalizedUids, institutionId, now))
+                            lastRefreshTime = now
+                            Log.d("FocusViewModel", "NFC registry refreshed: ${normalizedUids.size} tags.")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("FocusViewModel", "Error refreshing NFC registry: ${e.message}")
+            } finally {
+                isRefreshing = false
+            }
+        }
     }
 
     fun onSimulatedTagTap() {

@@ -33,6 +33,7 @@ import com.focustag.app.data.repository.AppInventoryRepository
 import com.focustag.app.data.repository.AppPolicyRepository
 import com.focustag.app.data.repository.EnforcementRepository
 import com.focustag.app.data.repository.FocusRepository
+import com.focustag.app.data.repository.NfcRepository
 import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.data.repository.SupabaseHistoryRepository
 import com.focustag.app.data.repository.SupabaseTeacherRepository
@@ -126,7 +127,8 @@ class MainActivity : ComponentActivity() {
                                     return FocusViewModel(
                                         context = this@MainActivity.applicationContext,
                                         focusRepository = FocusRepository(this@MainActivity, userId),
-                                        enforcementCoordinator = coordinator
+                                        enforcementCoordinator = coordinator,
+                                        nfcRepository = NfcRepository(this@MainActivity.applicationContext, userId)
                                     ) as T
                                 }
                             }
@@ -196,6 +198,8 @@ class MainActivity : ComponentActivity() {
                             focusViewModel?.refreshNfcCapability()
                             SyncScheduler.scheduleSync(this@MainActivity, userId)
                         } else {
+                            // DEFENSE-IN-DEPTH: Explicitly clear physical registry on logout/unauthenticated transition
+                            com.focustag.app.domain.NfcProtocol.setRegisteredTags(emptySet())
                             currentScreen = "home"
                         }
                     }
@@ -205,6 +209,7 @@ class MainActivity : ComponentActivity() {
                             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                                 focusViewModel?.refreshAccessibilityCapability()
                                 focusViewModel?.refreshNfcCapability()
+                                focusViewModel?.refreshRegistry()
                                 val userId = (sessionStatus as? SessionStatus.Authenticated)?.session?.user?.id
                                 userId?.let { SyncScheduler.scheduleSync(this@MainActivity, it) }
                             }

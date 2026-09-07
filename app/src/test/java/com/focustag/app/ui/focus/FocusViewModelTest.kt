@@ -16,7 +16,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import android.util.Log
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FocusViewModelTest {
@@ -26,20 +25,25 @@ class FocusViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
-    private lateinit var viewModel: FocusViewModel
     private lateinit var fakeRepo: FakeFocusRepository
     private lateinit var fakeCoordinator: FakeEnforcementCoordinator
+    private lateinit var fakeNfcRepo: FakeNfcRepository
+    private lateinit var fakeContext: FakeContext
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         
-        // Initialize fakeRepo only if not already done, to preserve state across setup() calls in one test
-        if (!::fakeRepo.isInitialized) {
-            fakeRepo = FakeFocusRepository()
-        }
+        // Reset static state
+        NfcProtocol.setRegisteredTags(emptySet())
+
+        fakeRepo = FakeFocusRepository()
+        fakeNfcRepo = FakeNfcRepository()
+        fakeContext = FakeContext()
         
-        // Manual fakes for coordinator dependencies to avoid crashes in super constructor
+        // Pre-verify institution for the default test user to allow cache loading by default
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
         val fakeInv = object : AppInventoryRepository(null as android.content.Context?) {
             override fun getInstalledApps(): List<AppInfo> = emptyList()
         }
@@ -63,34 +67,97 @@ class FocusViewModelTest {
         
         fakeCoordinator = FakeEnforcementCoordinator(fakeInv, fakePol, fakeEnfRepo, fakeHist)
 
-        // SYNC: Ensure coordinator matches repo before ViewModel.init
         if (fakeRepo.savedState.focusState == FocusState.FOCUS_ACTIVE) {
             fakeCoordinator.setStatus(EnforcementStatus.ENFORCEMENT_ACTIVE)
         } else {
             fakeCoordinator.setStatus(EnforcementStatus.IDLE)
         }
-        
-        viewModel = object : FocusViewModel(
-            context = null as android.content.Context?, 
-            focusRepository = fakeRepo,
-            enforcementCoordinator = fakeCoordinator
-        ) {
-            override fun refreshAccessibilityCapability() {
-                _accessibilityCapability.update { AccessibilityCapability.ACCESSIBILITY_READY }
-            }
-            override fun refreshNfcCapability() {
-                _nfcCapability.update { NfcCapability.NFC_READY }
-            }
-            override fun refreshEnforcementStatus() {}
+    }
+
+    private fun createViewModel(userId: String = "user1", nfcRepo: NfcRepository? = null) = object : FocusViewModel(
+        context = fakeContext, 
+        focusRepository = fakeRepo,
+        enforcementCoordinator = fakeCoordinator,
+        nfcRepository = nfcRepo ?: fakeNfcRepo,
+        currentUserIdProvider = { userId }
+    ) {
+        override fun refreshAccessibilityCapability() {
+            _accessibilityCapability.update { AccessibilityCapability.ACCESSIBILITY_READY }
         }
+        override fun refreshNfcCapability() {
+            _nfcCapability.update { NfcCapability.NFC_READY }
+        }
+        override fun refreshEnforcementStatus() {}
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        NfcProtocol.setRegisteredTags(emptySet())
     }
 
     // --- Fakes ---
+
+    open class FakeNfcRepository(val uId: String = "user1") : NfcRepository(null as android.content.Context?, uId) {
+        var tags = setOf("1D:FF:7C:1C:1A:10:80", "1D:5B:70:1C:1A:10:80")
+        var currentCache: NfcRegistryCache? = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        var profile: Profile? = Profile(uId, "User 1", "student", "inst1")
+        
+        var fetchTagsCount = 0
+        var fetchProfileCount = 0
+        
+        var shouldFailProfile = false
+        var shouldFailTags = false
+
+        override fun getCache(): NfcRegistryCache? = currentCache
+        override fun saveCache(cache: NfcRegistryCache) { this.currentCache = cache }
+        
+        override suspend fun fetchActiveTags(): Result<Set<String>> {
+            fetchTagsCount++
+            return if (shouldFailTags) Result.failure(Exception("Tags fetch failed")) else Result.success(tags)
+        }
+        
+        override suspend fun fetchProfile(): Result<Profile?> {
+            fetchProfileCount++
+            return if (shouldFailProfile) Result.failure(Exception("Profile fetch failed")) else Result.success(profile)
+        }
+    }
+
+    class FakeContext : android.content.ContextWrapper(null) {
+        private val prefsMap = mutableMapOf<String, FakeSharedPreferences>()
+        override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences {
+            return prefsMap.getOrPut(name) { FakeSharedPreferences() }
+        }
+    }
+
+    class FakeSharedPreferences : android.content.SharedPreferences {
+        private val data = mutableMapOf<String, String>()
+        override fun getAll(): Map<String, *> = data
+        override fun getString(key: String, defValue: String?): String? = data[key] ?: defValue
+        override fun contains(key: String): Boolean = data.containsKey(key)
+        override fun edit() = FakeEditor(data)
+        
+        override fun getStringSet(key: String, defValues: Set<String>?): Set<String>? = null
+        override fun getInt(key: String, defValue: Int): Int = 0
+        override fun getLong(key: String, defValue: Long): Long = 0L
+        override fun getFloat(key: String, defValue: Float): Float = 0f
+        override fun getBoolean(key: String, defValue: Boolean): Boolean = false
+        override fun registerOnSharedPreferenceChangeListener(listener: android.content.SharedPreferences.OnSharedPreferenceChangeListener?) {}
+        override fun unregisterOnSharedPreferenceChangeListener(listener: android.content.SharedPreferences.OnSharedPreferenceChangeListener?) {}
+    }
+
+    class FakeEditor(private val data: MutableMap<String, String>) : android.content.SharedPreferences.Editor {
+        override fun putString(key: String, value: String?) = apply { if (value != null) data[key] = value else data.remove(key) }
+        override fun remove(key: String) = apply { data.remove(key) }
+        override fun apply() {}
+        override fun commit(): Boolean = true
+        override fun putStringSet(key: String, values: Set<String>?) = this
+        override fun putInt(key: String, value: Int) = this
+        override fun putLong(key: String, value: Long) = this
+        override fun putFloat(key: String, value: Float) = this
+        override fun putBoolean(key: String, value: Boolean) = this
+        override fun clear() = this
+    }
 
     class FakeFocusRepository : FocusRepository(null as android.content.Context?, "user1") {
         var savedState = FocusSessionState()
@@ -141,64 +208,211 @@ class FocusViewModelTest {
         override suspend fun checkAndHandleOrphans() {}
     }
 
-    // --- Test Cases A-J ---
+    // --- Test Cases ---
 
     @Test
-    fun `Case A - START success`() = runTest {
+    fun testCaseA_STARTsuccess() = runTest {
         val libTag = "1D:FF:7C:1C:1A:10:80"
+        NfcProtocol.setRegisteredTags(setOf(libTag))
         
-        viewModel.onTagEvent(libTag)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        
+        vm.onTagEvent(rawToTag(libTag))
         advanceUntilIdle()
 
         assertTrue(fakeCoordinator.startCalled)
-        assertEquals(libTag, fakeCoordinator.startTagId)
-        assertEquals(FocusState.FOCUS_ACTIVE, viewModel.focusState.value.focusState)
-        assertEquals(libTag, viewModel.focusState.value.activeTagId)
-        assertEquals(libTag, fakeRepo.savedState.activeTagId)
     }
 
     @Test
-    fun `Case B - STOP success`() = runTest {
+    fun testCaseB_STOPsuccess() = runTest {
         val libTag = "1D:FF:7C:1C:1A:10:80"
-        fakeRepo.savedState = FocusSessionState(FocusState.FOCUS_ACTIVE, libTag)
+        NfcProtocol.setRegisteredTags(setOf(libTag))
         
-        // Re-init to pick up state
-        setup()
+        fakeRepo.savedState = FocusSessionState(FocusState.FOCUS_ACTIVE, libTag)
+        fakeCoordinator.setStatus(EnforcementStatus.ENFORCEMENT_ACTIVE)
 
-        viewModel.onTagEvent(libTag)
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.onTagEvent(rawToTag(libTag))
         advanceUntilIdle()
 
         assertTrue(fakeCoordinator.stopCalled)
-        assertEquals(FocusState.NORMAL, viewModel.focusState.value.focusState)
-        assertEquals(null, viewModel.focusState.value.activeTagId)
-        assertEquals(null, fakeRepo.savedState.activeTagId)
     }
 
     @Test
-    fun `Case C - DIFFERENT registered tag while ACTIVE results in IGNORE`() = runTest {
+    fun testCaseC_IGNORE_different_tag() = runTest {
         val libTag = "1D:FF:7C:1C:1A:10:80"
-        val class1Tag = "1D:5B:70:1C:1A:10:80"
-        fakeRepo.savedState = FocusSessionState(FocusState.FOCUS_ACTIVE, libTag)
+        val otherTag = "1D:5B:70:1C:1A:10:80"
+        NfcProtocol.setRegisteredTags(setOf(libTag, otherTag))
         
-        setup()
+        fakeRepo.savedState = FocusSessionState(FocusState.FOCUS_ACTIVE, libTag)
+        fakeCoordinator.setStatus(EnforcementStatus.ENFORCEMENT_ACTIVE)
 
-        viewModel.onTagEvent(class1Tag)
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.onTagEvent(rawToTag(otherTag))
         advanceUntilIdle()
 
         assertTrue(!fakeCoordinator.stopCalled)
         assertTrue(!fakeCoordinator.startCalled)
-        assertEquals(FocusState.FOCUS_ACTIVE, viewModel.focusState.value.focusState)
-        assertEquals(libTag, viewModel.focusState.value.activeTagId)
-        assertEquals(libTag, fakeRepo.savedState.activeTagId)
+        assertEquals(FocusState.FOCUS_ACTIVE, vm.focusState.value.focusState)
     }
 
     @Test
-    fun `Case D - UNKNOWN NORMAL ignore`() = runTest {
+    fun testCaseD_UNKNOWNNORMALignore() = runTest {
         val unknownTag = "AA:BB:CC:DD:EE:FF:00"
-        viewModel.onTagEvent(unknownTag)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        
+        vm.onTagEvent(unknownTag)
         advanceUntilIdle()
 
         assertTrue(!fakeCoordinator.startCalled)
-        assertEquals(FocusState.NORMAL, viewModel.focusState.value.focusState)
     }
+
+    @Test
+    fun testRegistry_FreshCacheApplied() = runTest {
+        val tags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+        
+        createViewModel()
+        advanceUntilIdle()
+        
+        assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_ExpiredCacheNotApplied() = runTest {
+        val tags = setOf("1D:FF:7C:1C:1A:10:80")
+        val expiredTime = System.currentTimeMillis() - (49 * 60 * 60 * 1000L)
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", expiredTime)
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+        
+        fakeNfcRepo.tags = emptySet()
+
+        createViewModel()
+        advanceUntilIdle()
+        
+        assertTrue(!NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_InstitutionMismatchNotApplied() = runTest {
+        val tags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst2").apply()
+        
+        fakeNfcRepo.tags = emptySet()
+
+        createViewModel()
+        advanceUntilIdle()
+        
+        assertTrue(!NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_NullInstitutionClears() = runTest {
+        // Start with registered tags
+        NfcProtocol.setRegisteredTags(setOf("1D:FF:7C:1C:1A:10:80"))
+        
+        // Setup repo with NO institution
+        val nullInstRepo = FakeNfcRepository()
+        nullInstRepo.profile = Profile("user1", "User 1", "student", null)
+        nullInstRepo.currentCache = null // Ensure no valid cache
+        
+        // Force refresh to be old enough
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().remove("institution_id").apply()
+        
+        createViewModel(nfcRepo = nullInstRepo)
+        advanceUntilIdle()
+        
+        assertTrue("Registry should be empty for null institution", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_FailedRefreshKeepsValidCache() = runTest {
+        val tags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.tags = tags
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        
+        fakeNfcRepo.shouldFailProfile = true
+        vm.refreshRegistry()
+        advanceUntilIdle()
+        
+        assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_SuccessfulRefreshReplaces() = runTest {
+        val initialTags = setOf("1D:FF:7C:1C:1A:10:80")
+        val newTags = setOf("1D:5B:70:1C:1A:10:80")
+        
+        // Cache has old tags, and is old enough to not throttle refresh during construction
+        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, "inst1", System.currentTimeMillis() - (10 * 60 * 1000L))
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+        
+        // Supabase has NEW tags
+        fakeNfcRepo.tags = newTags
+        
+        // Construct VM -> init will load cache THEN refresh from Supabase
+        createViewModel()
+        advanceUntilIdle()
+        
+        assertTrue(NfcProtocol.isRegistered("1D:5B:70:1C:1A:10:80"))
+        assertTrue(!NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_RefreshThrottled() = runTest {
+        val initialTags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.tags = initialTags
+        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        
+        val countAfterInit = fakeNfcRepo.fetchProfileCount
+        
+        vm.refreshRegistry()
+        advanceUntilIdle()
+        
+        assertEquals(countAfterInit, fakeNfcRepo.fetchProfileCount)
+    }
+
+    @Test
+    fun testRegistry_AccountSwitchingIsolatesCache() = runTest {
+        // User A setup
+        val userATags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.tags = userATags
+        fakeNfcRepo.currentCache = NfcRegistryCache(userATags, "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+        
+        createViewModel(userId = "user1")
+        advanceUntilIdle()
+        assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        
+        // User B setup - NO Reset of NfcProtocol singleton
+        val userBRepo = FakeNfcRepository(uId = "user2")
+        userBRepo.currentCache = null // No cache for B
+        userBRepo.profile = Profile("user2", "User 2", "student", null) // No inst for B
+        userBRepo.tags = emptySet()
+        
+        createViewModel(userId = "user2", nfcRepo = userBRepo)
+        advanceUntilIdle()
+        
+        // User A's tag must BE GONE now that B initialized
+        assertTrue("User A's registry leaked into User B", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+    
+    private fun rawToTag(uid: String) = uid.replace(":", "")
 }

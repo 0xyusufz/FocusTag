@@ -1,15 +1,17 @@
 package com.focustag.app.domain
 
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 
 object NfcProtocol {
-    private val physicalRegistry = mapOf(
-        "1D:FF:7C:1C:1A:10:80" to "Library 1",
-        "1D:5B:70:1C:1A:10:80" to "Classroom 1",
-        "1D:3D:70:1C:1A:10:80" to "Classroom 2",
-        "1D:C5:7C:1C:1A:10:80" to "Classroom 3",
-        "1D:39:77:1C:1A:10:80" to "Classroom 4"
-    )
+    private val registeredUids = AtomicReference<Set<String>>(emptySet())
+
+    /**
+     * Updates the registry of recognized NFC tags.
+     */
+    fun setRegisteredTags(uids: Set<String>) {
+        registeredUids.set(uids)
+    }
 
     /**
      * Normalizes a tag UID to the canonical uppercase colon-separated format.
@@ -35,16 +37,19 @@ object NfcProtocol {
     }
 
     /**
-     * Returns true if the UID is one of the three real prototype NFC tags.
+     * Returns true if the UID is registered in the current active registry.
      */
     fun isRegistered(uid: String): Boolean {
-        return physicalRegistry.containsKey(uid)
+        if (uid == "simulated_tag_01") return true
+        val normalized = normalize(uid) ?: return false
+        return registeredUids.get().contains(normalized)
     }
 
     /**
      * Returns the human-readable location for a registered tag UID.
+     * Legacy hardcoded mapping removed as required.
      */
     fun getLocation(uid: String): String? {
-        return physicalRegistry[uid]
+        return null
     }
 }
