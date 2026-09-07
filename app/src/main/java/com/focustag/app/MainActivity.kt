@@ -196,6 +196,7 @@ class MainActivity : ComponentActivity() {
                             focusViewModel?.refreshEnforcementStatus()
                             focusViewModel?.refreshAccessibilityCapability()
                             focusViewModel?.refreshNfcCapability()
+                            focusViewModel?.refreshRegistry()
                             SyncScheduler.scheduleSync(this@MainActivity, userId)
                         } else {
                             // DEFENSE-IN-DEPTH: Explicitly clear physical registry on logout/unauthenticated transition
