@@ -23,7 +23,7 @@ class SupabaseAuthRepository : AuthRepository {
 
     override suspend fun signUp(email: String, password: String, name: String): Result<Unit> {
         return try {
-            Log.d(TAG, "Signing up user: email=$email, name=$name")
+            Log.d(TAG, "Signing up user...")
             SupabaseModule.client.auth.signUpWith(Email, redirectUrl = "focustag://auth/callback") {
                 this.email = email
                 this.password = password

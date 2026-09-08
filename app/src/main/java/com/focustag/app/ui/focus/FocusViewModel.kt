@@ -154,7 +154,7 @@ open class FocusViewModel(
             return
         }
 
-        Log.d("FocusViewModel", "Initial registry: Loaded ${cache.activeUids.size} tags for institution $verifiedInstitutionId")
+        Log.d("FocusViewModel", "Initial registry: Loaded ${cache.activeUids.size} tags for institution.")
         NfcProtocol.setRegisteredTags(cache.activeUids)
         // SURGICAL FIX: Do NOT restore lastRefreshTime from disk cache.
         // lastRefreshTime should only track the last successful network refresh in the current process.

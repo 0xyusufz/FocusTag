@@ -93,7 +93,7 @@ class SupabaseTeacherRepository : TeacherRepository {
 
     override suspend fun getClassRoster(classId: String): Result<List<RosterStudent>> {
         return try {
-            Log.d(TAG, "Fetching roster for class: $classId")
+            Log.d(TAG, "Fetching roster for class...")
             
             // 1. Fetch class info to get location_id
             val classInfo = SupabaseModule.client.from("classes")

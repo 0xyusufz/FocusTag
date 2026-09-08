@@ -63,12 +63,12 @@ open class EnforcementCoordinator(
     }
 
     open suspend fun startEnforcement(tagId: String? = null) = globalMutex.withLock {
-        Log.d(TAG, "Starting enforcement for $userId")
+        Log.d(TAG, "Starting enforcement...")
         
         // Check for device owner conflict
         val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
         if (currentOwner != null && currentOwner != userId) {
-            Log.e(TAG, "Device enforcement already owned by $currentOwner")
+            Log.e(TAG, "Device enforcement already owned by another user")
             updateStatus(EnforcementStatus.ENFORCEMENT_FAILED)
             return@withLock
         }
@@ -112,7 +112,7 @@ open class EnforcementCoordinator(
     }
 
     open suspend fun stopEnforcement() = globalMutex.withLock {
-        Log.d(TAG, "Stopping enforcement for $userId")
+        Log.d(TAG, "Stopping enforcement...")
 
         // Check for device ownership
         val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
@@ -149,11 +149,11 @@ open class EnforcementCoordinator(
     }
 
     open suspend fun reconcile() {
-        Log.d(TAG, "Reconciling enforcement for $userId - entry")
+        Log.d(TAG, "Reconciling enforcement - entry")
         
-        Log.d(TAG, "Reconciling enforcement for $userId - waiting for lock")
+        Log.d(TAG, "Reconciling enforcement - waiting for lock")
         globalMutex.withLock {
-            Log.d(TAG, "Reconciling enforcement for $userId - lock acquired")
+            Log.d(TAG, "Reconciling enforcement - lock acquired")
 
             // Check for device ownership
             val currentOwner = enforcementRepository.getDeviceEnforcementOwnerId()
@@ -170,12 +170,12 @@ open class EnforcementCoordinator(
 
             val ledger = enforcementRepository.getLedger()
             
-            Log.d(TAG, "Reconciling enforcement for $userId - strategy start")
+            Log.d(TAG, "Reconciling enforcement - strategy start")
             val result = strategy.reconcile(snapshot, ledger)
-            Log.d(TAG, "Reconciling enforcement for $userId - strategy end")
+            Log.d(TAG, "Reconciling enforcement - strategy end")
             
             handleEnforcementResult(result)
-            Log.d(TAG, "Reconciling enforcement for $userId - state published")
+            Log.d(TAG, "Reconciling enforcement - state published")
         }
     }
 

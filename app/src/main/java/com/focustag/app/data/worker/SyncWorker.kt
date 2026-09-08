@@ -20,24 +20,23 @@ class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
     override suspend fun doWork(): Result {
         val userId = inputData.getString(KEY_USER_ID) ?: return Result.failure()
         
-        Log.d(TAG, "SyncWorker started for user: $userId")
+        Log.d(TAG, "SyncWorker started.")
 
         // 0. Initialize client with persistence
         SupabaseModule.initialize(applicationContext)
 
         // 1. STATED-BASED AUTH WAIT: Wait for definitive Authenticated or NotAuthenticated state
         val auth = SupabaseModule.client.auth
-        Log.d(TAG, "SyncWorker: Current auth status before wait: ${auth.sessionStatus.value}")
+        Log.d(TAG, "SyncWorker: Checking auth status...")
         
         val status = try {
             withTimeout(30000) { // 30s safety backstop
                 auth.sessionStatus.first { 
-                    Log.d(TAG, "SyncWorker: Auth status emitted: $it")
                     it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated 
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "SyncWorker: Timeout waiting for definitive auth state. Current state: ${auth.sessionStatus.value}")
+            Log.w(TAG, "SyncWorker: Timeout waiting for definitive auth state.")
             // Transient timeout (e.g. cold network) -> Retry
             return Result.retry()
         }
@@ -45,12 +44,12 @@ class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
         // 2. AUTH GATE: Definitive outcome handling
         when (status) {
             is SessionStatus.NotAuthenticated -> {
-                Log.w(TAG, "SyncWorker: Definitive signed-out state for $userId. Aborting sync.")
+                Log.w(TAG, "SyncWorker: User not authenticated. Aborting sync.")
                 return Result.failure()
             }
             is SessionStatus.Authenticated -> {
                 if (status.session.user?.id != userId) {
-                    Log.w(TAG, "SyncWorker: User mismatch. expected=$userId, actual=${status.session.user?.id}. Aborting sync.")
+                    Log.w(TAG, "SyncWorker: User session mismatch. Aborting sync.")
                     return Result.failure()
                 }
                 

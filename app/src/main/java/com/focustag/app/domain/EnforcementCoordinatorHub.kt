@@ -28,7 +28,7 @@ object EnforcementCoordinatorHub {
      */
     fun getCoordinator(context: Context, userId: String): EnforcementCoordinator = synchronized(this) {
         return coordinators.getOrPut(userId) {
-            Log.d(TAG, "Creating new EnforcementCoordinator for $userId")
+            Log.d(TAG, "Creating new EnforcementCoordinator for user.")
             val appContext = context.applicationContext
             EnforcementCoordinator(
                 userId = userId,
@@ -53,7 +53,7 @@ object EnforcementCoordinatorHub {
                 val activeOwnerId = enforcementRepo.getDeviceEnforcementOwnerId()
 
                 if (activeOwnerId != null) {
-                    Log.i(TAG, "Headless reconciliation requested for owner: $activeOwnerId")
+                    Log.i(TAG, "Headless reconciliation requested.")
                     val coordinator = getCoordinator(context, activeOwnerId)
                     coordinator.reconcile()
                 } else {

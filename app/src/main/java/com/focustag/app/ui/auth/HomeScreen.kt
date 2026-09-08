@@ -210,24 +210,26 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Button(
-                    onClick = focusViewModel::onSimulatedTagTap,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isTransitioning && (isFocusActive || isAccessibilityReady),
-                    colors = if (isFocusActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
-                ) {
-                    if (isTransitioning) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(if (isFocusActive) "Simulate Focus Tag (Deactivate)" else "Simulate Focus Tag (Activate)")
+                if (com.focustag.app.BuildConfig.DEBUG) {
+                    Button(
+                        onClick = focusViewModel::onSimulatedTagTap,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isTransitioning && (isFocusActive || isAccessibilityReady),
+                        colors = if (isFocusActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
+                    ) {
+                        if (isTransitioning) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(if (isFocusActive) "Simulate Focus Tag (Deactivate)" else "Simulate Focus Tag (Activate)")
+                        }
                     }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
                 
                 Button(
                     onClick = onNavigateToApps,

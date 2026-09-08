@@ -34,7 +34,7 @@ class SharedPreferencesSessionManager(context: Context) : SessionManager {
         Log.d("SupabaseModule", "Session JSON found, length: ${json.length}")
         return try {
             val session = Json.decodeFromString<UserSession>(json)
-            Log.d("SupabaseModule", "Session decoded successfully. User ID: ${session.user?.id}")
+            Log.d("SupabaseModule", "Session decoded successfully.")
             session
         } catch (e: Throwable) {
             Log.e("SupabaseModule", "Error decoding session JSON: ${e.message}", e)

@@ -28,12 +28,12 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
 
     fun loadProfile(userId: String, email: String) {
         viewModelScope.launch {
-            Log.d(TAG, "Loading profile for userId: $userId")
+            Log.d(TAG, "Loading profile...")
             _uiState.update { it.copy(isLoading = true, errorMessage = null, userId = userId, email = email) }
             val result = repository.getProfile(userId)
             result.onSuccess { profile ->
                 if (profile != null) {
-                    Log.d(TAG, "Profile loaded successfully: $profile")
+                    Log.d(TAG, "Profile loaded successfully.")
                     _uiState.update { 
                         it.copy(
                             isLoading = false, 
@@ -42,7 +42,7 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
                         ) 
                     }
                 } else {
-                    Log.w(TAG, "Profile row not found for userId: $userId")
+                    Log.w(TAG, "Profile row not found.")
                     _uiState.update { 
                         it.copy(
                             isLoading = false, 

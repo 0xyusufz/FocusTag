@@ -16,7 +16,7 @@ interface ProfileRepository {
 class SupabaseProfileRepository : ProfileRepository {
     override suspend fun getProfile(userId: String): Result<Profile?> {
         return try {
-            Log.d(TAG, "Fetching profile for $userId")
+            Log.d(TAG, "Fetching profile...")
             val result = SupabaseModule.client.from("profiles")
                 .select(columns = Columns.ALL) {
                     filter {
@@ -24,17 +24,17 @@ class SupabaseProfileRepository : ProfileRepository {
                     }
                 }
             val profile = result.decodeSingleOrNull<Profile>()
-            Log.d(TAG, "Fetch result: $profile")
+            Log.d(TAG, "Fetch profile complete.")
             Result.success(profile)
         } catch (e: Exception) {
-            Log.e(TAG, "Fetch failed: ${e.message}", e)
+            Log.e(TAG, "Fetch failed: ${e.message}")
             Result.failure(e)
         }
     }
 
     override suspend fun updateName(userId: String, name: String): Result<Unit> {
         return try {
-            Log.d(TAG, "Updating name for $userId to $name")
+            Log.d(TAG, "Updating profile name...")
             SupabaseModule.client.from("profiles").update({
                 set("name", name)
             }) {

@@ -193,7 +193,7 @@ class MainActivity : ComponentActivity() {
                             val session = (sessionStatus as SessionStatus.Authenticated).session
                             val userId = session.user?.id ?: ""
                             val email = session.user?.email ?: ""
-                            Log.d("MainActivity", "Authenticated: userId=$userId, email=$email")
+                            Log.d("MainActivity", "Authenticated session restored for user.")
                             profileViewModel.loadProfile(userId, email)
                             focusViewModel?.refreshEnforcementStatus()
                             focusViewModel?.refreshAccessibilityCapability()
