@@ -11,11 +11,18 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 
 @Serializable
-data class NfcTagDto(val uid: String)
+data class NfcTagWithLocationDto(
+    val uid: String,
+    val locations: LocationNameDto
+)
+
+@Serializable
+data class LocationNameDto(val name: String)
 
 @Serializable
 data class NfcRegistryCache(
     val activeUids: Set<String>,
+    val tagDisplayNames: Map<String, String>, // New field for UID -> Location Name mapping
     val fetchedForInstitutionId: String?,
     val fetchedAtMillis: Long,
     val schemaVersion: Int = 1
@@ -31,21 +38,28 @@ open class NfcRepository(private val context: Context?, private val userId: Stri
         const val KEY_CACHE = "registry_cache"
     }
 
-    open suspend fun fetchActiveTags(): Result<Set<String>> {
+    open suspend fun fetchActiveTagsWithNames(): Result<Map<String, String>> {
         return try {
-            Log.d(TAG, "Fetching active tags from Supabase...")
+            Log.d(TAG, "Fetching active tags with location names from Supabase...")
+            // Dynamic resolution: nfc_tags.uid -> locations.name
             val response = SupabaseModule.client.from("nfc_tags")
-                .select(columns = Columns.list("uid")) {
+                .select(columns = Columns.raw("uid, locations(name)")) {
                     filter {
                         eq("is_active", true)
                     }
                 }
-                .decodeList<NfcTagDto>()
-            Result.success(response.map { it.uid }.toSet())
+                .decodeList<NfcTagWithLocationDto>()
+            
+            val tagMap = response.associate { it.uid to it.locations.name }
+            Result.success(tagMap)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch NFC tags: ${e.message}")
+            Log.e(TAG, "Failed to fetch NFC tags with names: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    open suspend fun fetchActiveTags(): Result<Set<String>> {
+        return fetchActiveTagsWithNames().map { it.keys }
     }
 
     open suspend fun fetchProfile(): Result<Profile?> {

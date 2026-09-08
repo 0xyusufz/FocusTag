@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.focustag.app.data.model.FocusSessionRecord
 import com.focustag.app.data.repository.SessionHistoryRepository
 import com.focustag.app.data.repository.SupabaseHistoryRepository
+import com.focustag.app.data.repository.NfcRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,19 +16,22 @@ import kotlinx.coroutines.launch
 data class HistorySessionItem(
     val record: FocusSessionRecord,
     val durationMillis: Long?,
-    val interceptionCount: Int
+    val interceptionCount: Int,
+    val tagDisplayName: String? = null
 )
 
 data class HistoryUiState(
     val sessions: List<HistorySessionItem> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val tagMap: Map<String, String> = emptyMap()
 )
 
 class HistoryViewModel(
     private val userId: String,
     private val localRepo: SessionHistoryRepository,
-    private val remoteRepo: SupabaseHistoryRepository
+    private val remoteRepo: SupabaseHistoryRepository,
+    private val nfcRepository: NfcRepository
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
@@ -39,6 +43,7 @@ class HistoryViewModel(
         _isLoading,
         _errorMessage
     ) { sessions, events, loading, error ->
+        val tagMap = nfcRepository.getCache()?.tagDisplayNames ?: emptyMap()
         val items = sessions.map { session ->
             val sessionEvents = events.filter { it.sessionId == session.sessionId }
             val duration = if (session.endAt != null) {
@@ -49,9 +54,14 @@ class HistoryViewModel(
             } else {
                 null
             }
-            HistorySessionItem(session, duration, sessionEvents.size)
+            val displayName = when (session.tagId) {
+                "simulated_tag_01" -> "Simulated Tag"
+                null -> null
+                else -> tagMap[session.tagId] ?: session.tagId
+            }
+            HistorySessionItem(session, duration, sessionEvents.size, tagDisplayName = displayName)
         }
-        HistoryUiState(items, loading, error)
+        HistoryUiState(items, loading, error, tagMap = tagMap)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HistoryUiState())
 
     fun refresh() {

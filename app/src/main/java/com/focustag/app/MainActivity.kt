@@ -145,7 +145,8 @@ class MainActivity : ComponentActivity() {
                                     return HistoryViewModel(
                                         userId = userId,
                                         localRepo = SessionHistoryRepository(this@MainActivity, userId),
-                                        remoteRepo = SupabaseHistoryRepository()
+                                        remoteRepo = SupabaseHistoryRepository(),
+                                        nfcRepository = NfcRepository(this@MainActivity.applicationContext, userId)
                                     ) as T
                                 }
                             }
@@ -160,7 +161,8 @@ class MainActivity : ComponentActivity() {
                                 @Suppress("UNCHECKED_CAST")
                                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                                     return com.focustag.app.ui.dashboard.DashboardViewModel(
-                                        localRepo = SessionHistoryRepository(this@MainActivity, userId)
+                                        localRepo = SessionHistoryRepository(this@MainActivity, userId),
+                                        nfcRepository = NfcRepository(this@MainActivity.applicationContext, userId)
                                     ) as T
                                 }
                             }
@@ -196,7 +198,8 @@ class MainActivity : ComponentActivity() {
                             focusViewModel?.refreshEnforcementStatus()
                             focusViewModel?.refreshAccessibilityCapability()
                             focusViewModel?.refreshNfcCapability()
-                            focusViewModel?.refreshRegistry()
+                            // SURGICAL FIX: Force refresh on authentication to ensure authoritative sync
+                            focusViewModel?.refreshRegistry(force = true)
                             SyncScheduler.scheduleSync(this@MainActivity, userId)
                         } else {
                             // DEFENSE-IN-DEPTH: Explicitly clear physical registry on logout/unauthenticated transition
@@ -210,7 +213,8 @@ class MainActivity : ComponentActivity() {
                             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                                 focusViewModel?.refreshAccessibilityCapability()
                                 focusViewModel?.refreshNfcCapability()
-                                focusViewModel?.refreshRegistry()
+                                // SURGICAL FIX: Force refresh on resume to ensure deactivations propagate immediately
+                                focusViewModel?.refreshRegistry(force = true)
                                 val userId = (sessionStatus as? SessionStatus.Authenticated)?.session?.user?.id
                                 userId?.let { SyncScheduler.scheduleSync(this@MainActivity, it) }
                             }

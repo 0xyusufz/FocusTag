@@ -158,7 +158,7 @@ fun HistoryItemCard(item: HistorySessionItem, dateFormat: SimpleDateFormat) {
             if (record.tagId != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Tag: ${getDisplayNameForTag(record.tagId)}",
+                    text = "Tag: ${item.tagDisplayName ?: record.tagId}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
@@ -188,15 +188,5 @@ private fun formatDuration(millis: Long?): String {
         "${minutes}m ${seconds % 60}s"
     } else {
         "${seconds}s"
-    }
-}
-
-private fun getDisplayNameForTag(tagId: String): String {
-    return when (tagId) {
-        "1D:FF:7C:1C:1A:10:80" -> "Library 1"
-        "1D:5B:70:1C:1A:10:80" -> "Classroom 1"
-        "1D:3D:70:1C:1A:10:80" -> "Classroom 2"
-        "simulated_tag_01" -> "Simulated Tag"
-        else -> tagId
     }
 }

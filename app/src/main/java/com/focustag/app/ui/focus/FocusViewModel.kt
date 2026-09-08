@@ -156,13 +156,20 @@ open class FocusViewModel(
 
         Log.d("FocusViewModel", "Initial registry: Loaded ${cache.activeUids.size} tags for institution $verifiedInstitutionId")
         NfcProtocol.setRegisteredTags(cache.activeUids)
-        lastRefreshTime = cache.fetchedAtMillis
+        // SURGICAL FIX: Do NOT restore lastRefreshTime from disk cache.
+        // lastRefreshTime should only track the last successful network refresh in the current process.
+        // This ensures Scenario B (Restart) always performs an authoritative refresh if online.
     }
 
-    fun refreshRegistry() {
+    fun refreshRegistry(force: Boolean = false) {
         if (isRefreshing || nfcRepository == null) return
         val now = System.currentTimeMillis()
-        if (now - lastRefreshTime < REFRESH_INTERVAL_MS && lastRefreshTime != 0L) return
+        
+        // RELIABILITY FIX: Bypass throttle if the registry is currently empty (e.g. after logout clear)
+        // OR if a force refresh is requested (e.g. on app resume)
+        val shouldBypassThrottle = force || NfcProtocol.isRegistryEmpty()
+        
+        if (!shouldBypassThrottle && now - lastRefreshTime < REFRESH_INTERVAL_MS && lastRefreshTime != 0L) return
 
         viewModelScope.launch {
             isRefreshing = true
@@ -191,15 +198,15 @@ open class FocusViewModel(
                             Log.d("FocusViewModel", "Institution changed. Discarding old cache.")
                             NfcProtocol.setRegisteredTags(emptySet())
                             // Overwrite with cleared cache to prevent resurrection
-                            nfcRepository.saveCache(NfcRegistryCache(emptySet(), institutionId, 0))
+                            nfcRepository.saveCache(NfcRegistryCache(emptySet(), emptyMap(), institutionId, 0))
                         }
 
-                        nfcRepository.fetchActiveTags().onSuccess { uids ->
-                            val normalizedUids = uids.mapNotNull { NfcProtocol.normalize(it) }.toSet()
-                            NfcProtocol.setRegisteredTags(normalizedUids)
-                            nfcRepository.saveCache(NfcRegistryCache(normalizedUids, institutionId, now))
+                        nfcRepository.fetchActiveTagsWithNames().onSuccess { tagMap ->
+                            val normalizedTagMap = tagMap.mapKeys { (uid, _) -> NfcProtocol.normalize(uid) ?: uid }
+                            NfcProtocol.setRegisteredTags(normalizedTagMap.keys)
+                            nfcRepository.saveCache(NfcRegistryCache(normalizedTagMap.keys, normalizedTagMap, institutionId, now))
                             lastRefreshTime = now
-                            Log.d("FocusViewModel", "NFC registry refreshed: ${normalizedUids.size} tags.")
+                            Log.d("FocusViewModel", "NFC registry refreshed: ${normalizedTagMap.size} tags.")
                         }
                     }
                 }

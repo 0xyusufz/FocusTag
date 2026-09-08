@@ -14,6 +14,13 @@ object NfcProtocol {
     }
 
     /**
+     * Returns true if the physical registry is currently empty.
+     */
+    fun isRegistryEmpty(): Boolean {
+        return registeredUids.get().isEmpty()
+    }
+
+    /**
      * Normalizes a tag UID to the canonical uppercase colon-separated format.
      * Example: 1dff7c1c1a1080 -> 1D:FF:7C:1C:1A:10:80
      *

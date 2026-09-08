@@ -18,7 +18,8 @@ object DashboardStatsCalculator {
         sessions: List<FocusSessionRecord>,
         events: List<InterceptionEvent>,
         now: Long,
-        zoneId: ZoneId = IST
+        zoneId: ZoneId = IST,
+        tagMap: Map<String, String> = emptyMap()
     ): DashboardState {
         val today = Instant.ofEpochMilli(now).atZone(zoneId).toLocalDate()
 
@@ -55,7 +56,7 @@ object DashboardStatsCalculator {
             }
 
             val locationStats = locationMap.map { (tagId, pair) ->
-                LocationStat(tagId, getDisplayNameForTag(tagId), pair.first, pair.second)
+                LocationStat(tagId, getDisplayNameForTag(tagId, tagMap), pair.first, pair.second)
             }.filter { it.durationMillis > 0 || it.sessionCount > 0 }.sortedByDescending { it.durationMillis }
 
             // c. Blocked count and top distraction
@@ -116,7 +117,8 @@ object DashboardStatsCalculator {
             weeklyStats = weeklyStats,
             dailySummaries = dailySummaries.reversed(),
             bestDay = bestDay,
-            isLoading = false
+            isLoading = false,
+            tagMap = tagMap
         )
     }
 
@@ -130,14 +132,9 @@ object DashboardStatsCalculator {
         }
     }
 
-    private fun getDisplayNameForTag(tagId: String): String {
-        return when (tagId) {
-            "1D:FF:7C:1C:1A:10:80" -> "Library 1"
-            "1D:5B:70:1C:1A:10:80" -> "Classroom 1"
-            "1D:3D:70:1C:1A:10:80" -> "Classroom 2"
-            "simulated_tag_01" -> "Simulated Tag"
-            "unknown" -> "Unknown Location"
-            else -> tagId
-        }
+    private fun getDisplayNameForTag(tagId: String, tagMap: Map<String, String>): String {
+        if (tagId == "simulated_tag_01") return "Simulated Tag"
+        if (tagId == "unknown") return "Unknown Location"
+        return tagMap[tagId] ?: tagId
     }
 }

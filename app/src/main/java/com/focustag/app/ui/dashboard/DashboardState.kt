@@ -42,5 +42,6 @@ data class DashboardState(
     val weeklyStats: List<WeeklyStat> = emptyList(),
     val dailySummaries: List<DailySummary> = emptyList(),
     val bestDay: DailySummary? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val tagMap: Map<String, String> = emptyMap()
 )

@@ -89,7 +89,7 @@ fun DashboardScreen(
 
         if (state.activeSession != null) {
             item {
-                ActiveSessionCard(state.activeSession!!, onNavigateToFocus)
+                ActiveSessionCard(state.activeSession!!, state.tagMap, onNavigateToFocus)
             }
         } else {
             item {
@@ -139,7 +139,7 @@ fun DashboardScreen(
             }
         } else {
             items(state.recentSessions) { item ->
-                RecentSessionRow(item)
+                RecentSessionRow(item, state.tagMap)
             }
         }
         
@@ -477,8 +477,11 @@ fun DashboardHeader(
 }
 
 @Composable
-fun ActiveSessionCard(session: com.focustag.app.data.model.FocusSessionRecord, onNavigate: () -> Unit) {
-    val displayName = remember(session.tagId) { getDisplayNameForTag(session.tagId ?: "") }
+fun ActiveSessionCard(session: com.focustag.app.data.model.FocusSessionRecord, tagMap: Map<String, String>, onNavigate: () -> Unit) {
+    val displayName = remember(session.tagId, tagMap) { 
+        if (session.tagId == "simulated_tag_01") "Simulated Tag"
+        else tagMap[session.tagId ?: ""] ?: session.tagId ?: "Quick Start"
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -561,8 +564,11 @@ fun RecentActivityHeader(onViewAll: () -> Unit) {
 }
 
 @Composable
-fun RecentSessionRow(item: HistorySessionItem) {
-    val displayName = remember(item.record.tagId) { getDisplayNameForTag(item.record.tagId ?: "") }
+fun RecentSessionRow(item: HistorySessionItem, tagMap: Map<String, String>) {
+    val displayName = remember(item.record.tagId, tagMap) { 
+        if (item.record.tagId == "simulated_tag_01") "Simulated Tag"
+        else tagMap[item.record.tagId ?: ""] ?: item.record.tagId ?: "Quick Start"
+    }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -617,15 +623,5 @@ private fun formatDuration(millis: Long): String {
         hours > 0 -> "${hours}h ${minutes}m"
         minutes > 0 -> "${minutes}m ${seconds}s"
         else -> "${seconds}s"
-    }
-}
-
-private fun getDisplayNameForTag(tagId: String): String {
-    return when (tagId) {
-        "1D:FF:7C:1C:1A:10:80" -> "Library 1"
-        "1D:5B:70:1C:1A:10:80" -> "Classroom 1"
-        "1D:3D:70:1C:1A:10:80" -> "Classroom 2"
-        "simulated_tag_01" -> "Simulated Tag"
-        else -> if (tagId.isBlank()) "Quick Start" else tagId
     }
 }

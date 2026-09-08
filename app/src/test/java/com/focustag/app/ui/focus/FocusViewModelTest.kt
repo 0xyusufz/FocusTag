@@ -100,7 +100,11 @@ class FocusViewModelTest {
 
     open class FakeNfcRepository(val uId: String = "user1") : NfcRepository(null as android.content.Context?, uId) {
         var tags = setOf("1D:FF:7C:1C:1A:10:80", "1D:5B:70:1C:1A:10:80")
-        var currentCache: NfcRegistryCache? = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        var tagMap = mapOf(
+            "1D:FF:7C:1C:1A:10:80" to "Library 1",
+            "1D:5B:70:1C:1A:10:80" to "Classroom 1"
+        )
+        var currentCache: NfcRegistryCache? = NfcRegistryCache(tags, tagMap, "inst1", System.currentTimeMillis())
         var profile: Profile? = Profile(uId, "User 1", "student", "inst1")
         
         var fetchTagsCount = 0
@@ -112,9 +116,13 @@ class FocusViewModelTest {
         override fun getCache(): NfcRegistryCache? = currentCache
         override fun saveCache(cache: NfcRegistryCache) { this.currentCache = cache }
         
-        override suspend fun fetchActiveTags(): Result<Set<String>> {
+        override suspend fun fetchActiveTagsWithNames(): Result<Map<String, String>> {
             fetchTagsCount++
-            return if (shouldFailTags) Result.failure(Exception("Tags fetch failed")) else Result.success(tags)
+            return if (shouldFailTags) Result.failure(Exception("Tags fetch failed")) else Result.success(tagMap)
+        }
+        
+        override suspend fun fetchActiveTags(): Result<Set<String>> {
+            return fetchActiveTagsWithNames().map { it.keys }
         }
         
         override suspend fun fetchProfile(): Result<Profile?> {
@@ -276,7 +284,7 @@ class FocusViewModelTest {
     @Test
     fun testRegistry_FreshCacheApplied() = runTest {
         val tags = setOf("1D:FF:7C:1C:1A:10:80")
-        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, emptyMap(), "inst1", System.currentTimeMillis())
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
         
         createViewModel()
@@ -289,29 +297,30 @@ class FocusViewModelTest {
     fun testRegistry_ExpiredCacheNotApplied() = runTest {
         val tags = setOf("1D:FF:7C:1C:1A:10:80")
         val expiredTime = System.currentTimeMillis() - (49 * 60 * 60 * 1000L)
-        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", expiredTime)
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, emptyMap(), "inst1", expiredTime)
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
         
-        fakeNfcRepo.tags = emptySet()
+        // Prevent refresh from restoring them
+        fakeNfcRepo.tagMap = emptyMap()
 
         createViewModel()
         advanceUntilIdle()
         
-        assertTrue(!NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        assertTrue("Expired cache should not be applied", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
     }
 
     @Test
     fun testRegistry_InstitutionMismatchNotApplied() = runTest {
         val tags = setOf("1D:FF:7C:1C:1A:10:80")
-        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, emptyMap(), "inst1", System.currentTimeMillis())
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst2").apply()
         
-        fakeNfcRepo.tags = emptySet()
+        fakeNfcRepo.tagMap = emptyMap()
 
         createViewModel()
         advanceUntilIdle()
         
-        assertTrue(!NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        assertTrue("Mismatched institution cache should not be applied", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
     }
 
     @Test
@@ -337,7 +346,7 @@ class FocusViewModelTest {
     fun testRegistry_FailedRefreshKeepsValidCache() = runTest {
         val tags = setOf("1D:FF:7C:1C:1A:10:80")
         fakeNfcRepo.tags = tags
-        fakeNfcRepo.currentCache = NfcRegistryCache(tags, "inst1", System.currentTimeMillis())
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, emptyMap(), "inst1", System.currentTimeMillis())
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
 
         val vm = createViewModel()
@@ -345,7 +354,7 @@ class FocusViewModelTest {
         assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
         
         fakeNfcRepo.shouldFailProfile = true
-        vm.refreshRegistry()
+        vm.refreshRegistry(force = true)
         advanceUntilIdle()
         
         assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
@@ -354,39 +363,127 @@ class FocusViewModelTest {
     @Test
     fun testRegistry_SuccessfulRefreshReplaces() = runTest {
         val initialTags = setOf("1D:FF:7C:1C:1A:10:80")
+        val initialMap = mapOf("1D:FF:7C:1C:1A:10:80" to "Library 1")
         val newTags = setOf("1D:5B:70:1C:1A:10:80")
+        val newMap = mapOf("1D:5B:70:1C:1A:10:80" to "Classroom 1")
         
-        // Cache has old tags, and is old enough to not throttle refresh during construction
-        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, "inst1", System.currentTimeMillis() - (10 * 60 * 1000L))
+        // Cache has old tags and names
+        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, initialMap, "inst1", System.currentTimeMillis())
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
         
-        // Supabase has NEW tags
-        fakeNfcRepo.tags = newTags
+        // Supabase has OLD state initially
+        fakeNfcRepo.tags = initialTags
+        fakeNfcRepo.tagMap = initialMap
         
-        // Construct VM -> init will load cache THEN refresh from Supabase
-        createViewModel()
+        val vm = createViewModel()
+        advanceUntilIdle() // Ensure init refresh completes
+        
+        // Should have old tags
+        assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        assertEquals("Library 1", fakeNfcRepo.getCache()?.tagDisplayNames?.get("1D:FF:7C:1C:1A:10:80"))
+        
+        // Now update Supabase and force refresh
+        fakeNfcRepo.tags = newTags
+        fakeNfcRepo.tagMap = newMap
+        
+        vm.refreshRegistry(force = true)
         advanceUntilIdle()
         
-        assertTrue(NfcProtocol.isRegistered("1D:5B:70:1C:1A:10:80"))
-        assertTrue(!NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        // Should have new tags and names now
+        assertTrue("New tag not registered after refresh", NfcProtocol.isRegistered("1D:5B:70:1C:1A:10:80"))
+        assertTrue("Deactivated tag still registered", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+        assertEquals("Classroom 1", fakeNfcRepo.getCache()?.tagDisplayNames?.get("1D:5B:70:1C:1A:10:80"))
+        assertEquals(null, fakeNfcRepo.getCache()?.tagDisplayNames?.get("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_ProcessRestartBypassesThrottle() = runTest {
+        val tags = setOf("1D:FF:7C:1C:1A:10:80")
+        // Cache is fresh (1 min ago)
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, emptyMap(), "inst1", System.currentTimeMillis() - 60000)
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
+        // DB is updated (deactivated)
+        fakeNfcRepo.tags = emptySet()
+        fakeNfcRepo.tagMap = emptyMap()
+
+        // Construct VM (Simulating Scenario B - Restart)
+        createViewModel()
+        // lastRefreshTime should be 0, so init call to refreshRegistry should NOT throttle
+        advanceUntilIdle()
+        
+        // Registry should be empty now
+        assertTrue("Registry should have been refreshed on restart despite fresh cache", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
     }
 
     @Test
     fun testRegistry_RefreshThrottled() = runTest {
         val initialTags = setOf("1D:FF:7C:1C:1A:10:80")
         fakeNfcRepo.tags = initialTags
-        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, "inst1", System.currentTimeMillis())
+        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, emptyMap(), "inst1", System.currentTimeMillis())
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
 
         val vm = createViewModel()
         advanceUntilIdle()
         
+        // Successfully fetched once
         val countAfterInit = fakeNfcRepo.fetchProfileCount
         
+        // Change tags but don't force or advance time
+        fakeNfcRepo.tags = setOf("1D:5B:70:1C:1A:10:80")
         vm.refreshRegistry()
         advanceUntilIdle()
         
+        // Should be throttled
         assertEquals(countAfterInit, fakeNfcRepo.fetchProfileCount)
+        assertTrue(NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_EmptyRegistryBypassesThrottle() = runTest {
+        // Initial setup with matching cache so it loads something
+        val tags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.tags = tags
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, emptyMap(), "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        
+        // Explicitly clear registry (simulating logout/unauth transition)
+        NfcProtocol.setRegisteredTags(emptySet())
+        assertTrue(NfcProtocol.isRegistryEmpty())
+        
+        val countAfterInit = fakeNfcRepo.fetchProfileCount
+        
+        // Try refresh again immediately - should bypass throttle because registry is empty
+        vm.refreshRegistry()
+        advanceUntilIdle()
+        
+        assertEquals("Fetch should have occurred due to empty registry", countAfterInit + 1, fakeNfcRepo.fetchProfileCount)
+        assertTrue("Registry should be repopulated", NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testRegistry_Deactivation_NonEmpty_Throttled() = runTest {
+        val initialTags = setOf("1D:FF:7C:1C:1A:10:80", "1D:5B:70:1C:1A:10:80")
+        fakeNfcRepo.tags = initialTags
+        fakeNfcRepo.currentCache = NfcRegistryCache(initialTags, emptyMap(), "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        
+        // Supabase deactivates one
+        fakeNfcRepo.tags = setOf("1D:FF:7C:1C:1A:10:80")
+        fakeNfcRepo.tagMap = mapOf("1D:FF:7C:1C:1A:10:80" to "Library 1")
+        
+        // Normal refresh (force=false) within 5 mins
+        vm.refreshRegistry(force = false)
+        advanceUntilIdle()
+        
+        // Should STILL have both tags due to throttle
+        assertTrue("Tag should NOT have been removed due to throttle", NfcProtocol.isRegistered("1D:5B:70:1C:1A:10:80"))
     }
 
     @Test
@@ -394,7 +491,7 @@ class FocusViewModelTest {
         // User A setup
         val userATags = setOf("1D:FF:7C:1C:1A:10:80")
         fakeNfcRepo.tags = userATags
-        fakeNfcRepo.currentCache = NfcRegistryCache(userATags, "inst1", System.currentTimeMillis())
+        fakeNfcRepo.currentCache = NfcRegistryCache(userATags, emptyMap(), "inst1", System.currentTimeMillis())
         fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
         
         createViewModel(userId = "user1")
@@ -412,6 +509,26 @@ class FocusViewModelTest {
         
         // User A's tag must BE GONE now that B initialized
         assertTrue("User A's registry leaked into User B", !NfcProtocol.isRegistered("1D:FF:7C:1C:1A:10:80"))
+    }
+
+    @Test
+    fun testDisplayNames_Resolution() = runTest {
+        val tags = setOf("1D:FF:7C:1C:1A:10:80", "1D:C5:7C:1C:1A:10:80")
+        val tagMap = mapOf(
+            "1D:FF:7C:1C:1A:10:80" to "Library 1",
+            "1D:C5:7C:1C:1A:10:80" to "Classroom 3"
+        )
+        fakeNfcRepo.tagMap = tagMap
+        fakeNfcRepo.currentCache = NfcRegistryCache(tags, tagMap, "inst1", System.currentTimeMillis())
+        fakeContext.getSharedPreferences("verified_profile_user1", 0).edit().putString("institution_id", "inst1").apply()
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        
+        val cache = fakeNfcRepo.getCache()!!
+        assertEquals("Library 1", cache.tagDisplayNames["1D:FF:7C:1C:1A:10:80"])
+        assertEquals("Classroom 3", cache.tagDisplayNames["1D:C5:7C:1C:1A:10:80"])
+        assertEquals(null, cache.tagDisplayNames["AA:BB:CC"])
     }
     
     private fun rawToTag(uid: String) = uid.replace(":", "")

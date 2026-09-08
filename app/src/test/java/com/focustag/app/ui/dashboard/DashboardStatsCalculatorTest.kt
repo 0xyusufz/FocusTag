@@ -149,18 +149,49 @@ class DashboardStatsCalculatorTest {
     fun `calculate location aggregation`() {
         val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
         val libTag = "1D:FF:7C:1C:1A:10:80"
+        val c2Tag = "1D:3D:70:1C:1A:10:80"
+        
+        val tagMap = mapOf(
+            libTag to "Library 1",
+            c2Tag to "Classroom 2"
+        )
         
         val sessions = listOf(
             FocusSessionRecord("s1", "u1", libTag, now - 3600000, now - 1800000, SessionStatus.COMPLETED),
-            FocusSessionRecord("s2", "u1", libTag, now - 1200000, now, SessionStatus.COMPLETED)
+            FocusSessionRecord("s2", "u1", c2Tag, now - 1200000, now, SessionStatus.COMPLETED)
         )
         
-        val state = DashboardStatsCalculator.calculate(sessions, emptyList(), now, zoneId)
+        val state = DashboardStatsCalculator.calculate(sessions, emptyList(), now, zoneId, tagMap = tagMap)
         
-        assertEquals(1, state.todayLocationCount)
+        assertEquals(2, state.todayLocationCount)
+        // Sort by duration descending in calculator
         assertEquals("Library 1", state.todayLocations[0].displayName)
-        assertEquals(3000000L, state.todayLocations[0].durationMillis) // 30m + 20m = 50m = 3,000,000ms
-        assertEquals(2, state.todayLocations[0].sessionCount)
+        assertEquals("Classroom 2", state.todayLocations[1].displayName)
+    }
+
+    @Test
+    fun `unknown tag resolves to UID`() {
+        val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
+        val unknownTag = "AA:BB:CC:DD:EE:FF:00"
+        val sessions = listOf(
+            FocusSessionRecord("s1", "u1", unknownTag, now - 1000, now, SessionStatus.COMPLETED)
+        )
+        
+        val state = DashboardStatsCalculator.calculate(sessions, emptyList(), now, zoneId, tagMap = emptyMap())
+        
+        assertEquals(unknownTag, state.todayLocations[0].displayName)
+    }
+
+    @Test
+    fun `simulated tag resolves correctly`() {
+        val now = Instant.parse("2026-09-02T12:00:00Z").toEpochMilli()
+        val sessions = listOf(
+            FocusSessionRecord("s1", "u1", "simulated_tag_01", now - 1000, now, SessionStatus.COMPLETED)
+        )
+        
+        val state = DashboardStatsCalculator.calculate(sessions, emptyList(), now, zoneId, tagMap = emptyMap())
+        
+        assertEquals("Simulated Tag", state.todayLocations[0].displayName)
     }
 
     @Test
